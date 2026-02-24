@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>SpeakTwin</title>
+</head>
+<body style="font-family: Arial; text-align:center; margin-top:50px;">
+
+<h1>🎤 SpeakTwin Live Feedback</h1>
+
+<button onclick="start()">Start Listening</button>
+<button onclick="stop()">Stop</button>
+
+<h2 id="msg">Waiting...</h2>
+
+<script>
+let interval=null;
+
+function start(){
+    if(interval) return;
+
+    interval=setInterval(async ()=>{
+        try{
+            const res = await fetch("/analyze");
+            const data = await res.json();
+            document.getElementById("msg").innerText = data.message;
+        }catch(e){
+            document.getElementById("msg").innerText="Server error...";
+        }
+    },1500);
+}
+
+function stop(){
+    clearInterval(interval);
+    interval=null;
+    document.getElementById("msg").innerText="Stopped";
+}
+</script>
+
+</body>
+</html>
