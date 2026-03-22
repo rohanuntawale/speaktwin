@@ -1,11 +1,16 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+*.egg
+.eggs/
+
 # Virtual Environment
 venv/
 env/
-__pycache__/
-*.pyc
-*.pyo
-*.pyd
-.Python
+.venv/
 
 # IDE
 .vscode/
@@ -16,7 +21,15 @@ __pycache__/
 # OS
 .DS_Store
 Thumbs.db
+desktop.ini
 
-# Project specific
-.env
+# Whisper model cache
+*.bin
+*.ct2
+
+# Logs
 *.log
+
+# Environment
+.env
+.env.local
