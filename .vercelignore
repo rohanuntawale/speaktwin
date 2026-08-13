@@ -1,0 +1,30 @@
+# Vercel only serves the frontend. Everything else is dead weight in the
+# upload — and `data/` and `venv/` would blow past the deployment limit.
+backend/
+tests/
+training/
+scripts/
+docs/
+data/
+models/
+.models/
+venv/
+env/
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+Dockerfile
+Dockerfile.ml
+render.yaml
+fly.toml
+pytest.ini
+requirements*.txt
+server.py
+audio_engine.py
+static/
+
+.env
+.env.local
+*.log

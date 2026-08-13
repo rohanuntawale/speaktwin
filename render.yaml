@@ -1,0 +1,58 @@
+# ============================================================
+# SpeakTwin backend — Render blueprint
+#
+#   1. Push this repo to GitHub
+#   2. Render dashboard → New → Blueprint → pick the repo
+#   3. Set GROQ_API_KEY and CORS_ORIGINS in the dashboard
+#
+# Why a container host rather than serverless: the session store and
+# rate limiter live in process memory, so the app needs a process that
+# stays alive between requests.
+# ============================================================
+services:
+  - type: web
+    name: speaktwin-api
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: free
+    region: oregon
+    healthCheckPath: /api/health
+
+    envVars:
+      - key: PORT
+        value: 8000
+
+      # Free instances have 512 MB of RAM. Local Whisper wants a large
+      # slice of that and risks an OOM kill, so use a cloud engine here
+      # and keep the container light. Set the key in the dashboard.
+      - key: STT_ENGINE
+        value: groq
+      - key: GROQ_API_KEY
+        sync: false          # set in the dashboard, never in git
+
+      # Lock this to your Vercel domain before going public. If you use
+      # the vercel.json rewrite, requests arrive same-origin and this
+      # can stay closed.
+      - key: CORS_ORIGINS
+        sync: false
+
+      # /api/analyze can spend money at a cloud provider on every call.
+      # Set a value here and send it as X-API-Key from the frontend, or
+      # leave it unset only while the URL is private.
+      - key: API_KEY
+        sync: false
+
+      - key: LOG_LEVEL
+        value: INFO
+      - key: RATE_LIMIT_PER_MINUTE
+        value: 60
+      - key: MAX_UPLOAD_BYTES
+        value: 10485760
+      - key: SESSION_TTL_SECONDS
+        value: 3600
+
+      # Optional LLM coaching line
+      - key: OPENROUTER_API_KEY
+        sync: false
+      - key: LLM_MIN_INTERVAL_SECONDS
+        value: 10
