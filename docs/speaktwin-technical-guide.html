@@ -1,0 +1,1141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>SpeakTwin — Technical Guide</title>
+<style>
+  @page { size: A4; margin: 18mm 16mm 20mm 16mm; }
+  @page :first { margin: 0; }
+
+  * { box-sizing: border-box; }
+  html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  body {
+    font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    font-size: 9.6pt; line-height: 1.55; color: #1a1d21; margin: 0;
+  }
+
+  /* ---------- Cover ---------- */
+  .cover {
+    height: 297mm; width: 210mm; page-break-after: always;
+    background: linear-gradient(150deg, #171a3a 0%, #2d1b4e 55%, #4a1f5c 100%);
+    color: #fff; padding: 38mm 22mm; position: relative; overflow: hidden;
+  }
+  .cover::after {
+    content: ""; position: absolute; right: -60mm; bottom: -70mm;
+    width: 190mm; height: 190mm; border-radius: 50%;
+    background: radial-gradient(circle, rgba(124,92,255,.32) 0%, rgba(124,92,255,0) 68%);
+  }
+  .cover h1 { font-size: 40pt; margin: 0 0 4mm; letter-spacing: -1.2px; font-weight: 800; }
+  .cover .sub { font-size: 15pt; color: #b9aef5; margin: 0 0 20mm; font-weight: 300; }
+  .cover .tag {
+    display: inline-block; border: 1px solid rgba(255,255,255,.32);
+    border-radius: 20px; padding: 2mm 6mm; font-size: 8.5pt;
+    letter-spacing: 1.6px; text-transform: uppercase; margin-bottom: 14mm;
+  }
+  .cover .meta { position: absolute; bottom: 30mm; left: 22mm; font-size: 9pt;
+                 color: #cdc6f0; line-height: 1.9; z-index: 2; }
+  .cover .meta b { color: #fff; font-weight: 600; }
+  .cover .rule { width: 34mm; height: 3px; background: #7c5cff; margin: 0 0 8mm; }
+
+  /* ---------- Structure ---------- */
+  h2 {
+    font-size: 17pt; color: #171a3a; margin: 0 0 5mm; padding-bottom: 2.5mm;
+    border-bottom: 2.5px solid #7c5cff; page-break-after: avoid; font-weight: 700;
+    letter-spacing: -.3px;
+  }
+  .part { page-break-before: always; }
+  h3 { font-size: 12pt; color: #2d1b4e; margin: 7mm 0 2.5mm;
+       page-break-after: avoid; font-weight: 700; }
+  h4 { font-size: 10pt; color: #3a3f4a; margin: 5mm 0 1.5mm;
+       page-break-after: avoid; font-weight: 600; }
+  p { margin: 0 0 2.8mm; }
+  ul, ol { margin: 0 0 3mm; padding-left: 5.5mm; }
+  li { margin-bottom: 1.2mm; }
+
+  code {
+    font-family: "Cascadia Mono", Consolas, "Courier New", monospace;
+    font-size: 8.4pt; background: #f0eefb; padding: 0.4mm 1.2mm;
+    border-radius: 2px; color: #4a1f5c;
+  }
+  pre {
+    font-family: "Cascadia Mono", Consolas, monospace; font-size: 7.9pt;
+    background: #1b1e2e; color: #e4e2f5; padding: 3.5mm 4mm; border-radius: 4px;
+    overflow-x: auto; line-height: 1.5; page-break-inside: avoid;
+    margin: 0 0 3.5mm; border-left: 3px solid #7c5cff;
+  }
+  pre code { background: none; color: inherit; padding: 0; font-size: inherit; }
+  .c { color: #8b93b8; }  /* comment */
+  .k { color: #ff9ec4; }  /* keyword */
+  .s { color: #a5e8a0; }  /* string  */
+  .n { color: #ffd88a; }  /* number  */
+
+  table { width: 100%; border-collapse: collapse; margin: 0 0 4mm;
+          font-size: 8.5pt; page-break-inside: avoid; }
+  th { background: #171a3a; color: #fff; text-align: left;
+       padding: 1.8mm 2.5mm; font-weight: 600; font-size: 8.2pt; }
+  td { padding: 1.6mm 2.5mm; border-bottom: 0.5px solid #ddd9ee; vertical-align: top; }
+  tr:nth-child(even) td { background: #faf9fe; }
+  td code { font-size: 7.9pt; }
+
+  .box { border-left: 3px solid #7c5cff; background: #f7f5ff;
+         padding: 3mm 4mm; margin: 0 0 4mm; page-break-inside: avoid; }
+  .warn { border-left-color: #e08a2e; background: #fdf6ec; }
+  .good { border-left-color: #2e9e6b; background: #eefaf4; }
+  .bad  { border-left-color: #d24b58; background: #fdf0f1; }
+  .box p:last-child { margin-bottom: 0; }
+  .box .lbl { font-weight: 700; font-size: 8pt; letter-spacing: .8px;
+              text-transform: uppercase; color: #4a1f5c; display: block;
+              margin-bottom: 1.5mm; }
+  .warn .lbl { color: #a8620f; } .good .lbl { color: #1d6e49; } .bad .lbl { color: #9e2933; }
+
+  .toc { column-count: 2; column-gap: 10mm; font-size: 9pt; }
+  .toc div { margin-bottom: 1.4mm; break-inside: avoid; }
+  .toc .num { display: inline-block; width: 7mm; color: #7c5cff; font-weight: 700; }
+  .toc .sec { color: #666; font-size: 8.2pt; padding-left: 7mm; display: block; }
+
+  .lead { font-size: 10.5pt; color: #44485a; margin-bottom: 5mm; }
+  figure { margin: 0 0 5mm; page-break-inside: avoid; text-align: center; }
+  figcaption { font-size: 8pt; color: #6b7080; margin-top: 1.5mm; font-style: italic; }
+  .fileref { font-family: Consolas, monospace; font-size: 8pt; color: #4a1f5c;
+             background: #f0eefb; padding: .3mm 1.2mm; border-radius: 2px; }
+  .two { display: flex; gap: 5mm; }
+  .two > div { flex: 1; }
+  .kpi { display: flex; gap: 3mm; margin-bottom: 4mm; }
+  .kpi div { flex: 1; background: #f7f5ff; border-top: 2.5px solid #7c5cff;
+             padding: 2.5mm; text-align: center; }
+  .kpi .v { font-size: 15pt; font-weight: 800; color: #171a3a; display: block; }
+  .kpi .l { font-size: 7.4pt; color: #6b7080; text-transform: uppercase;
+            letter-spacing: .5px; }
+</style>
+</head>
+<body>
+
+<!-- ============================ COVER ============================ -->
+<div class="cover">
+  <div class="tag">Technical Documentation</div>
+  <h1>SpeakTwin</h1>
+  <div class="rule"></div>
+  <p class="sub">AI Communication Mirror<br>Complete Architecture &amp; Engineering Guide</p>
+  <div class="meta">
+    <b>Version</b> 1.1.0<br>
+    <b>Stack</b> FastAPI · Whisper · PyTorch · Vanilla JS<br>
+    <b>Test suite</b> 158 passing<br>
+    <b>Author</b> Rohan Untawale
+  </div>
+</div>
+
+<!-- ============================ TOC ============================ -->
+<h2>Contents</h2>
+<div class="toc">
+  <div><span class="num">1</span>What SpeakTwin Is<span class="sec">Problem, approach, design constraints</span></div>
+  <div><span class="num">2</span>System Architecture<span class="sec">Layers, boundaries, why capture is client-side</span></div>
+  <div><span class="num">3</span>Request Lifecycle<span class="sec">Every step from microphone to feedback</span></div>
+  <div><span class="num">4</span>Audio Ingestion<span class="sec">Decode, mono, float32, resample</span></div>
+  <div><span class="num">5</span>Acoustic Analysis<span class="sec">Energy, pitch, pause detection — the maths</span></div>
+  <div><span class="num">6</span>Speech-to-Text<span class="sec">Hybrid cloud/local routing</span></div>
+  <div><span class="num">7</span>Linguistic Analysis<span class="sec">Fillers, keywords, clarity</span></div>
+  <div><span class="num">8</span>Scoring &amp; Feedback<span class="sec">Confidence maths and coaching rules</span></div>
+  <div><span class="num">9</span>Session Layer<span class="sec">Aggregation, smoothing, adaptive gating</span></div>
+  <div><span class="num">10</span>Deep Learning Layer<span class="sec">Eight models, measured costs</span></div>
+  <div><span class="num">11</span>Security &amp; Middleware<span class="sec">Rate limits, auth, request IDs</span></div>
+  <div><span class="num">12</span>API Reference<span class="sec">Every endpoint and field</span></div>
+  <div><span class="num">13</span>Configuration Reference<span class="sec">All environment variables</span></div>
+  <div><span class="num">14</span>Datasets &amp; Training<span class="sec">14 corpora, licences, pipeline</span></div>
+  <div><span class="num">15</span>Frontend<span class="sec">Web Audio capture and rendering</span></div>
+  <div><span class="num">16</span>Testing &amp; Deployment<span class="sec">Suite, Docker, CI</span></div>
+  <div><span class="num">17</span>Technology Choices<span class="sec">What is used, and what could be</span></div>
+  <div><span class="num">18</span>Limitations &amp; Roadmap<span class="sec">Honest constraints, next steps</span></div>
+  <div><span class="num">A</span>File Map<span class="sec">Every file and its job</span></div>
+</div>
+
+<!-- ============================ 1 ============================ -->
+<div class="part">
+<h2>1 · What SpeakTwin Is</h2>
+
+<p class="lead">SpeakTwin is a real-time speech coaching system. It listens while you
+speak, analyses delivery every 2.5 seconds, and returns actionable feedback — pace,
+loudness, vocal variety, filler words, clarity, and a composite confidence score.</p>
+
+<h3>1.1 The problem</h3>
+<p>People are poor judges of their own delivery. You cannot hear your own filler words
+while producing them, you cannot tell that you have drifted monotone, and you rarely
+notice you have accelerated past the point of intelligibility. Recording yourself helps,
+but reviewing recordings is slow and most people never do it.</p>
+<p>SpeakTwin closes that loop to a few seconds. You speak, and within one chunk you see
+what a listener would notice.</p>
+
+<h3>1.2 Design constraints</h3>
+<p>Four constraints shape every decision in this codebase:</p>
+<table>
+  <tr><th style="width:32%">Constraint</th><th>Consequence</th></tr>
+  <tr><td><b>Sub-3-second latency</b></td><td>Analysis runs on 2.5 s chunks. Every component has a hard time budget; anything slower than the chunk rate causes backlog.</td></tr>
+  <tr><td><b>Must run without a GPU</b></td><td>Default path is pure DSP plus a quantised int8 Whisper. Neural models are optional and off by default.</td></tr>
+  <tr><td><b>Must run on a server</b></td><td>A deployed server has no microphone, so capture happens in the browser and audio is POSTed as chunks.</td></tr>
+  <tr><td><b>Must degrade, never break</b></td><td>Every optional component — cloud STT, LLM coaching, all eight neural models — fails to a working fallback rather than an error.</td></tr>
+</table>
+
+<h3>1.3 What it measures</h3>
+<div class="kpi">
+  <div><span class="v">6</span><span class="l">Acoustic metrics</span></div>
+  <div><span class="v">5</span><span class="l">Linguistic metrics</span></div>
+  <div><span class="v">4</span><span class="l">Score components</span></div>
+  <div><span class="v">8</span><span class="l">Optional models</span></div>
+</div>
+<table>
+  <tr><th style="width:26%">Metric</th><th style="width:16%">Unit</th><th>Meaning</th></tr>
+  <tr><td>Energy</td><td>RMS + dBFS</td><td>Loudness. Reported on a log scale because linear RMS swings wildly with microphone gain.</td></tr>
+  <tr><td>Pitch</td><td>Hz</td><td>Fundamental frequency, averaged over voiced frames only.</td></tr>
+  <tr><td>Pitch variation</td><td>Hz (σ)</td><td>Vocal expressiveness. Low σ reads as monotone.</td></tr>
+  <tr><td>Voiced ratio</td><td>0–1</td><td>Fraction of frames carrying pitch. Distinguishes "monotone" from "barely spoke".</td></tr>
+  <tr><td>Pause ratio</td><td>0–1</td><td>Fraction of the chunk that is silence.</td></tr>
+  <tr><td>Longest pause</td><td>seconds</td><td>Longest single silent stretch — a hesitation, not just total quiet.</td></tr>
+  <tr><td>WPM</td><td>words/min</td><td>Speaking rate from transcript word count over chunk duration.</td></tr>
+  <tr><td>Filler count / rate</td><td>count, per-word</td><td>Context-aware filler detection (see §7.1).</td></tr>
+  <tr><td>Keywords</td><td>count</td><td>Target vocabulary hits, for positive reinforcement.</td></tr>
+  <tr><td>Clarity</td><td>0–100</td><td>MATTR lexical variety minus a filler penalty.</td></tr>
+  <tr><td>Confidence</td><td>0–100</td><td>Weighted composite of the four sub-scores.</td></tr>
+</table>
+</div>
+
+<!-- ============================ 2 ============================ -->
+<div class="part">
+<h2>2 · System Architecture</h2>
+
+<figure>
+<svg width="480" height="360" viewBox="0 0 480 360" xmlns="http://www.w3.org/2000/svg" font-family="Segoe UI, Arial" font-size="9">
+  <defs>
+    <marker id="ar" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L7,3 z" fill="#7c5cff"/>
+    </marker>
+  </defs>
+
+  <rect x="10" y="8" width="460" height="62" rx="5" fill="#f7f5ff" stroke="#7c5cff" stroke-width="1.4"/>
+  <text x="20" y="24" font-weight="700" fill="#171a3a">BROWSER</text>
+  <rect x="24" y="32" width="96" height="28" rx="3" fill="#fff" stroke="#c9c0f0"/>
+  <text x="72" y="50" text-anchor="middle" fill="#2d1b4e">Web Audio API</text>
+  <rect x="132" y="32" width="96" height="28" rx="3" fill="#fff" stroke="#c9c0f0"/>
+  <text x="180" y="50" text-anchor="middle" fill="#2d1b4e">WAV encoder</text>
+  <rect x="240" y="32" width="96" height="28" rx="3" fill="#fff" stroke="#c9c0f0"/>
+  <text x="288" y="50" text-anchor="middle" fill="#2d1b4e">UI renderer</text>
+  <rect x="348" y="32" width="108" height="28" rx="3" fill="#fff" stroke="#c9c0f0"/>
+  <text x="402" y="50" text-anchor="middle" fill="#2d1b4e">Session client</text>
+
+  <line x1="240" y1="70" x2="240" y2="96" stroke="#7c5cff" stroke-width="1.6" marker-end="url(#ar)"/>
+  <text x="248" y="87" fill="#6b7080" font-size="8">POST /api/analyze · 2.5 s WAV chunk</text>
+
+  <rect x="10" y="100" width="460" height="40" rx="5" fill="#171a3a"/>
+  <text x="20" y="117" font-weight="700" fill="#fff">MIDDLEWARE</text>
+  <text x="20" y="130" fill="#b9aef5" font-size="8">CORS → Request ID → Rate limit → API key</text>
+
+  <line x1="240" y1="140" x2="240" y2="162" stroke="#7c5cff" stroke-width="1.6" marker-end="url(#ar)"/>
+
+  <rect x="10" y="166" width="460" height="112" rx="5" fill="#f7f5ff" stroke="#7c5cff" stroke-width="1.4"/>
+  <text x="20" y="182" font-weight="700" fill="#171a3a">ANALYSIS PIPELINE  (threadpool, never the event loop)</text>
+
+  <rect x="22" y="190" width="80" height="34" rx="3" fill="#fff" stroke="#c9c0f0"/>
+  <text x="62" y="204" text-anchor="middle" fill="#2d1b4e" font-size="8">Audio I/O</text>
+  <text x="62" y="215" text-anchor="middle" fill="#8b93b8" font-size="7">resample 16k</text>
+
+  <rect x="112" y="190" width="80" height="34" rx="3" fill="#fff" stroke="#c9c0f0"/>
+  <text x="152" y="204" text-anchor="middle" fill="#2d1b4e" font-size="8">Acoustics</text>
+  <text x="152" y="215" text-anchor="middle" fill="#8b93b8" font-size="7">pitch · energy</text>
+
+  <rect x="202" y="190" width="80" height="34" rx="3" fill="#fff" stroke="#c9c0f0"/>
+  <text x="242" y="204" text-anchor="middle" fill="#2d1b4e" font-size="8">Whisper STT</text>
+  <text x="242" y="215" text-anchor="middle" fill="#8b93b8" font-size="7">cloud / local</text>
+
+  <rect x="292" y="190" width="80" height="34" rx="3" fill="#fff" stroke="#c9c0f0"/>
+  <text x="332" y="204" text-anchor="middle" fill="#2d1b4e" font-size="8">Linguistics</text>
+  <text x="332" y="215" text-anchor="middle" fill="#8b93b8" font-size="7">filler · clarity</text>
+
+  <rect x="382" y="190" width="76" height="34" rx="3" fill="#fff" stroke="#c9c0f0"/>
+  <text x="420" y="204" text-anchor="middle" fill="#2d1b4e" font-size="8">Scoring</text>
+  <text x="420" y="215" text-anchor="middle" fill="#8b93b8" font-size="7">confidence</text>
+
+  <rect x="22" y="234" width="436" height="34" rx="3" fill="#fdf6ec" stroke="#e08a2e" stroke-dasharray="3,2"/>
+  <text x="240" y="248" text-anchor="middle" fill="#a8620f" font-size="8" font-weight="600">OPTIONAL ML LAYER — off by default</text>
+  <text x="240" y="260" text-anchor="middle" fill="#a8620f" font-size="7">CREPE · Silero VAD · Disfluency · Emotion · ECAPA · pyannote · openSMILE · Alignment</text>
+
+  <line x1="240" y1="278" x2="240" y2="300" stroke="#7c5cff" stroke-width="1.6" marker-end="url(#ar)"/>
+
+  <rect x="10" y="304" width="222" height="46" rx="5" fill="#eefaf4" stroke="#2e9e6b" stroke-width="1.3"/>
+  <text x="22" y="320" font-weight="700" fill="#1d6e49" font-size="9">SESSION STORE</text>
+  <text x="22" y="332" fill="#2e9e6b" font-size="7.5">EMA smoothing · cumulative totals</text>
+  <text x="22" y="343" fill="#2e9e6b" font-size="7.5">adaptive gate · decoder context</text>
+
+  <rect x="248" y="304" width="222" height="46" rx="5" fill="#f7f5ff" stroke="#7c5cff" stroke-width="1.3"/>
+  <text x="260" y="320" font-weight="700" fill="#171a3a" font-size="9">EXTERNAL SERVICES</text>
+  <text x="260" y="332" fill="#6b7080" font-size="7.5">Groq / OpenAI Whisper (optional)</text>
+  <text x="260" y="343" fill="#6b7080" font-size="7.5">OpenRouter LLM insight (optional)</text>
+</svg>
+<figcaption>Figure 1 — System architecture. Dashed box is optional and disabled by default.</figcaption>
+</figure>
+
+<h3>2.1 Why capture is client-side</h3>
+<p>The original prototype used <code>sounddevice</code> to read the server's microphone. That
+works on a laptop and is impossible on a deployed server, which has no audio hardware.
+Capture therefore lives in the browser: the Web Audio API reads the microphone, a
+hand-written encoder produces WAV, and chunks are POSTed to the backend.</p>
+<div class="box"><span class="lbl">Consequence</span>
+<p>The backend is stateless with respect to audio hardware and scales horizontally.
+The legacy server-side capture module is retained for single-machine kiosk use, with its
+<code>sounddevice</code> import guarded so the module stays importable without the package.</p></div>
+
+<h3>2.2 Concurrency model</h3>
+<p>FastAPI runs <code>async def</code> handlers on the event loop. Whisper inference,
+autocorrelation, and outbound HTTP are all blocking, so running them inline stalls every
+other request in the process. The handler is <code>async</code> only to stream the upload;
+all real work is dispatched via <code>run_in_threadpool</code>.</p>
+<pre><code><span class="k">async def</span> analyze_blob(audio_file: UploadFile = File(...), ...):
+    raw = <span class="k">await</span> _read_limited(audio_file, settings.max_upload_bytes)
+    audio, src_sr = <span class="k">await</span> run_in_threadpool(prepare, raw, settings.max_audio_seconds)
+    <span class="k">return await</span> run_in_threadpool(_perform_full_analysis, audio, session_id, src_sr)</code></pre>
+<p>Models that are not thread-safe — Whisper, and every torch module — are additionally
+serialised behind per-model locks.</p>
+</div>
+
+<!-- ============================ 3 ============================ -->
+<div class="part">
+<h2>3 · Request Lifecycle</h2>
+<p class="lead">What happens between speaking a word and seeing feedback, in order.</p>
+
+<h3>Step 1 — Capture (browser)</h3>
+<p>On mic activation the frontend requests a 16 kHz <code>AudioContext</code>, attaches a
+<code>ScriptProcessorNode</code>, and accumulates samples. When the buffer reaches one chunk
+(2.5 s × the <em>actual</em> sample rate, which may differ from the 16 kHz hint), it is
+snapshotted and encoded.</p>
+<div class="box"><span class="lbl">Detail that matters</span>
+<p>The browser may ignore the sample-rate hint. The frontend therefore sends
+<code>audioCtx.sampleRate</code> — whatever it truly got — and the backend resamples. Assuming
+16 kHz here is precisely the bug described in §4.2.</p></div>
+
+<h3>Step 2 — Session association</h3>
+<p>On start, the client calls <code>POST /api/session</code> and attaches the returned
+<code>session_id</code> to every chunk. Without one, analysis still works but loses cross-chunk
+smoothing, cumulative totals, decoder context, and the adaptive silence gate.</p>
+
+<h3>Step 3 — Upload &amp; validation</h3>
+<p>The body is streamed in 64 KB reads and aborted the moment it exceeds
+<code>MAX_UPLOAD_BYTES</code>, so an oversized payload is rejected part-way rather than
+buffered whole. Decoding is capped independently at <code>MAX_AUDIO_SECONDS</code>.</p>
+
+<h3>Step 4 — Decode &amp; normalise</h3>
+<p>The header is inspected through <code>SoundFile</code> before any samples are read, so only
+the permitted number of frames is decoded. Audio is mono-mixed, converted to float32,
+resampled to exactly 16 kHz, and scrubbed of NaN/Inf.</p>
+
+<h3>Step 5 — Acoustic analysis</h3>
+<p>Energy (RMS → dBFS), pitch (windowed autocorrelation with voiced gating and octave
+correction), and pauses (frame RMS against a dBFS threshold). If the neural layer is
+enabled, CREPE and Silero override these results here.</p>
+
+<h3>Step 6 — Silence gate</h3>
+<p>If the chunk is silence, transcription is skipped entirely. This matters because Whisper
+hallucinates confidently on silence. The gate is adaptive per session (§9.3), and when
+Silero VAD is enabled its verdict supersedes the energy threshold.</p>
+
+<h3>Step 7 — Transcription</h3>
+<p>The resolved engine transcribes the chunk, receiving the tail of the session's previous
+transcript as <code>initial_prompt</code> so words are not mangled at chunk seams. On failure the
+response is flagged <code>degraded</code> and acoustic metrics — which remain valid — are still
+returned.</p>
+
+<h3>Step 8 — Linguistic analysis</h3>
+<p>Fillers (context-aware), keywords (longest-match n-grams), clarity (MATTR), and WPM from
+word count over chunk duration.</p>
+
+<h3>Step 9 — Scoring &amp; coaching</h3>
+<p>Four sub-scores are computed and combined by weight. Threshold rules generate coaching
+messages. If configured and not rate-limited, an LLM produces one punchy headline line;
+otherwise the first rule-based warning is promoted.</p>
+
+<h3>Step 10 — Session fold</h3>
+<p>The result is folded into the session: totals accumulate, EMAs update, the loudness
+history extends, and the transcript segment is appended. The updated summary rides back
+with the response.</p>
+
+<h3>Step 11 — Render</h3>
+<p>The client animates meters, the confidence ring (preferring the smoothed score), the
+breakdown bars, and appends the transcript with keyword and filler highlighting. The
+transcript is HTML-escaped before highlight spans are injected.</p>
+
+<figure>
+<svg width="470" height="120" viewBox="0 0 470 120" xmlns="http://www.w3.org/2000/svg" font-family="Segoe UI, Arial" font-size="7.5">
+  <defs><marker id="a2" markerWidth="7" markerHeight="7" refX="6" refY="2.5" orient="auto">
+    <path d="M0,0 L0,5 L6,2.5 z" fill="#7c5cff"/></marker></defs>
+  <text x="0" y="12" font-size="8.5" font-weight="700" fill="#171a3a">Time budget for one 2.5 s chunk</text>
+  <rect x="0" y="22" width="440" height="20" fill="#eeecf8" stroke="#c9c0f0"/>
+  <rect x="0" y="22" width="16" height="20" fill="#2e9e6b"/>
+  <text x="22" y="36" fill="#1d6e49">DSP baseline ~90 ms (4%)</text>
+
+  <rect x="0" y="52" width="440" height="20" fill="#eeecf8" stroke="#c9c0f0"/>
+  <rect x="0" y="52" width="185" height="20" fill="#7c5cff"/>
+  <text x="192" y="66" fill="#4a1f5c">+ CREPE &amp; Silero ~1050 ms (42%)</text>
+
+  <rect x="0" y="82" width="440" height="20" fill="#eeecf8" stroke="#c9c0f0"/>
+  <rect x="0" y="82" width="440" height="20" fill="#d24b58"/>
+  <rect x="440" y="82" width="30" height="20" fill="#d24b58" opacity=".45"/>
+  <text x="8" y="96" fill="#fff" font-weight="600">All models ~3400 ms — exceeds budget</text>
+  <line x1="440" y1="18" x2="440" y2="112" stroke="#171a3a" stroke-width="1.2" stroke-dasharray="3,2"/>
+  <text x="443" y="115" fill="#171a3a" font-size="7">2500 ms</text>
+</svg>
+<figcaption>Figure 2 — Measured CPU latency against the fixed chunk budget.</figcaption>
+</figure>
+</div>
+
+<!-- ============================ 4 ============================ -->
+<div class="part">
+<h2>4 · Audio Ingestion</h2>
+<p><span class="fileref">backend/services/audio_io.py</span></p>
+
+<h3>4.1 The contract</h3>
+<p>Everything downstream assumes mono, float32, exactly 16 kHz. This module is the single
+place that guarantees it.</p>
+<pre><code><span class="k">def</span> prepare(data: bytes, max_seconds, target_sr=<span class="n">16000</span>) -> tuple[np.ndarray, <span class="k">int</span>]:
+    mono, src_sr = decode(data, max_seconds=max_seconds)   <span class="c"># header-limited read</span>
+    audio = resample(mono, src_sr, target_sr)              <span class="c"># polyphase</span>
+    audio = np.nan_to_num(audio, nan=<span class="n">0.0</span>, posinf=<span class="n">0.0</span>, neginf=<span class="n">0.0</span>)
+    <span class="k">return</span> np.ascontiguousarray(audio, dtype=np.float32), src_sr</code></pre>
+
+<h3>4.2 The sample-rate bug this module exists to fix</h3>
+<div class="box bad"><span class="lbl">Bug found and fixed</span>
+<p>The original route read the sample rate and discarded it:</p>
+<pre style="margin-top:2mm"><code>y, sr = sf.read(io.BytesIO(audio_bytes))   <span class="c"># sr never used again</span></code></pre>
+<p>Everything downstream hardcoded 16 kHz — WPM as <code>len(audio)/SAMPLE_RATE</code>, pitch as
+<code>sr=SAMPLE_RATE</code>, and the Groq re-encode. A client sending 44.1 or 48 kHz audio had its
+pitch and speaking rate wrong by roughly 3×. It only appeared to work because the frontend
+happened to request 16 kHz.</p></div>
+
+<h3>4.3 Resampling</h3>
+<p>Polyphase resampling via the reduced integer ratio, so common conversions are exact
+rather than approximated:</p>
+<pre><code>divisor = math.gcd(src_sr, dst_sr)
+resample_poly(audio, dst_sr // divisor, src_sr // divisor)
+<span class="c"># 48000 → 16000 reduces to up=1, down=3 — exact</span></code></pre>
+
+<h3>4.4 Bounded decoding</h3>
+<p>Reading through <code>SoundFile</code> rather than <code>sf.read</code> allows inspecting the
+header and decoding only the permitted frames. A one-hour file uploaded to a 30-second
+endpoint costs 30 seconds of decode, not an hour.</p>
+</div>
+
+<!-- ============================ 5 ============================ -->
+<div class="part">
+<h2>5 · Acoustic Analysis</h2>
+<p><span class="fileref">backend/services/audio_analysis.py</span> — numpy and scipy only, no librosa.</p>
+
+<h3>5.1 Energy</h3>
+<p>RMS amplitude, converted to dBFS for all threshold comparisons:</p>
+<pre><code>rms   = sqrt(mean(x²))
+dBFS  = <span class="n">20</span> · log₁₀(rms)</code></pre>
+<div class="box"><span class="lbl">Why dBFS rather than linear RMS</span>
+<p>Thresholds on linear RMS swing wildly with microphone gain, OS input level, and browser
+AGC. On a log scale the same thresholds degrade gracefully. The linear constants are
+<em>derived</em> from the dBFS ones, so the two can never drift apart.</p></div>
+<table>
+  <tr><th>Threshold</th><th>dBFS</th><th>Equivalent RMS</th><th>Meaning</th></tr>
+  <tr><td>SILENCE</td><td>−45</td><td>≈ 0.0056</td><td>No speech detected</td></tr>
+  <tr><td>LOW</td><td>−36</td><td>≈ 0.0158</td><td>Speaking too softly</td></tr>
+  <tr><td>HIGH</td><td>−12</td><td>≈ 0.2512</td><td>Speaking too loudly</td></tr>
+  <tr><td>HARD FLOOR</td><td>−60</td><td>≈ 0.001</td><td>Adaptive gate never goes below this</td></tr>
+</table>
+
+<h3>5.2 Pitch — windowed autocorrelation</h3>
+<p>64 ms Hann-windowed frames, 32 ms hop. For each frame:</p>
+<ol>
+  <li><b>Voiced gate</b> — frames below −50 dBFS are skipped. Silence has no pitch, and including it corrupts the standard deviation that drives 25% of the confidence score.</li>
+  <li><b>Mean removal and windowing</b> — eliminates DC bias and edge discontinuity.</li>
+  <li><b>FFT autocorrelation</b>, normalised by lag-zero energy.</li>
+  <li><b>Restricted lag search</b> — only lags corresponding to 60–400 Hz are considered.</li>
+  <li><b>Voicing threshold</b> — normalised peak below 0.35 means unvoiced; frame discarded.</li>
+  <li><b>Local-maximum check</b> — see the bug box below.</li>
+  <li><b>Octave correction</b> — autocorrelation peaks at every multiple of the true period, so the raw argmax often lands an octave low. Sub-multiple lags are preferred when at least 85% as strong.</li>
+  <li><b>Parabolic interpolation</b> — sub-sample peak position for finer frequency resolution.</li>
+</ol>
+<div class="box bad"><span class="lbl">Bug caught by the test suite</span>
+<p>A 20 Hz signal — desk rumble, handling noise, DC drift — was reported as <b>400 Hz</b>.
+Its true period lies outside the search range, so the in-range maximum pins to the boundary
+lag, and the boundary was taken at face value. A desk bump would trigger "Pitch high, relax
+your voice". Fixed by requiring the peak to be a genuine interior local maximum.</p></div>
+
+<h4>Robust averaging</h4>
+<p>The reported mean discards residual octave outliers before averaging — values outside
+<code>[median/1.6, median×1.6]</code> are dropped — so a handful of bad frames cannot drag the
+reported pitch around.</p>
+
+<h3>5.3 Pause detection</h3>
+<p>Per-frame RMS is computed with a strided view rather than a Python loop, then compared
+against the dBFS gate. Both the total silent fraction and the longest consecutive run are
+reported; the latter distinguishes a hesitation from generally sparse speech.</p>
+</div>
+
+<!-- ============================ 6 ============================ -->
+<div class="part">
+<h2>6 · Speech-to-Text</h2>
+<p><span class="fileref">backend/services/speech_to_text.py</span></p>
+
+<h3>6.1 Engine routing</h3>
+<table>
+  <tr><th>STT_ENGINE</th><th>Behaviour</th></tr>
+  <tr><td><code>auto</code> (default)</td><td>Groq if keyed → OpenAI if keyed → local faster-whisper</td></tr>
+  <tr><td><code>groq</code></td><td>Groq <code>whisper-large-v3</code>, falling back to local on failure</td></tr>
+  <tr><td><code>openai</code></td><td>OpenAI <code>whisper-1</code>, falling back to local on failure</td></tr>
+  <tr><td><code>local</code></td><td>faster-whisper <code>tiny.en</code>, int8 quantised, CPU</td></tr>
+</table>
+
+<h3>6.2 Concurrency</h3>
+<div class="box warn"><span class="lbl">Not thread-safe</span>
+<p><code>WhisperModel.transcribe</code> is not safe to call from several threads at once, and this
+service runs inside FastAPI's threadpool. The original code locked only <em>loading</em>.
+Inference is now serialised behind a separate <code>_inference_lock</code>.</p></div>
+
+<h3>6.3 Cross-chunk context</h3>
+<p>Each chunk is decoded with the tail of the session's transcript (220 characters) as
+<code>initial_prompt</code>. Without it, every 2.5 s boundary cuts a word in half and the decoder
+has no way to recover it. <code>condition_on_previous_text=False</code> is set separately to prevent
+the decoder looping on its own output — the classic repeated-phrase hallucination.</p>
+
+<h3>6.4 Silence handling</h3>
+<p>Two independent defences: the silence gate skips transcription entirely for quiet chunks,
+and Silero VAD (via <code>vad_filter</code>) trims silence before decoding, with a no-VAD retry if
+the ONNX runtime is unavailable.</p>
+</div>
+
+<!-- ============================ 7 ============================ -->
+<div class="part">
+<h2>7 · Linguistic Analysis</h2>
+
+<h3>7.1 Context-aware filler detection</h3>
+<p><span class="fileref">backend/services/filler_detection.py</span></p>
+<p>Filler words split into two classes. Hesitation sounds are always fillers. Discourse
+markers have legitimate lexical uses and are only counted in filler positions.</p>
+<table>
+  <tr><th style="width:16%">Word</th><th style="width:22%">Rule</th><th>Counted</th><th>Not counted</th></tr>
+  <tr><td><code>um</code>, <code>uh</code>, <code>er</code></td><td>always</td><td colspan="2">Hesitation sounds have no lexical use</td></tr>
+  <tr><td><code>so</code></td><td>clause-initial</td><td>"<b>So</b> the solution is…"</td><td>"…<b>so</b> we shipped it"</td></tr>
+  <tr><td><code>well</code></td><td>clause-initial</td><td>"<b>Well</b>, that went badly"</td><td>"It went <b>well</b> today"</td></tr>
+  <tr><td><code>right</code></td><td>clause-final</td><td>"That is exactly <b>right</b>"</td><td>"The <b>right</b> answer"</td></tr>
+  <tr><td><code>like</code></td><td>lexical-context</td><td>"it was <b>like</b> really fast"</td><td>"I <b>like</b> this", "would <b>like</b> to"</td></tr>
+</table>
+<p>Detection walks the token stream longest-match-first, so <code>you know</code> beats a bare
+<code>know</code>, and a recognised phrase used lexically is skipped without re-testing its
+shorter prefixes.</p>
+
+<h3>7.2 Keyword detection</h3>
+<p>The same longest-match walk over target vocabulary. <code>artificial intelligence</code>
+registers once as a phrase rather than twice as separate words. N-grams never span
+punctuation, so a phrase cannot straddle a clause boundary.</p>
+
+<h3>7.3 Clarity — why MATTR</h3>
+<p><span class="fileref">backend/services/clarity_analysis.py</span></p>
+<div class="box"><span class="lbl">The measurement problem</span>
+<p>Plain type-token ratio (unique ÷ total) is strongly length-dependent. A five-word chunk
+almost always scores 1.0; a hundred-word one rarely clears 0.6. A per-chunk score and a
+whole-session score are therefore not comparable on the same axis.</p></div>
+<p>MATTR — moving-average type-token ratio — averages TTR across every sliding 25-word
+window, which stays stable as text grows. Texts shorter than one window fall back to plain
+TTR. Raw TTR is still reported for display.</p>
+<pre><code>mattr  = mean(TTR(window) <span class="k">for</span> window <span class="k">in</span> sliding(words, <span class="n">25</span>))
+score  = min(<span class="n">1.0</span>, mattr / <span class="n">0.75</span>) × <span class="n">100</span> − filler_rate × <span class="n">300</span></code></pre>
+<p>An intermediate design using root TTR was rejected during development: it under-rewards
+the short chunks SpeakTwin actually sends, scoring a perfectly clear six-word utterance
+at 38/100.</p>
+</div>
+
+<!-- ============================ 8 ============================ -->
+<div class="part">
+<h2>8 · Scoring &amp; Feedback</h2>
+
+<h3>8.1 Confidence composite</h3>
+<p><span class="fileref">backend/services/confidence_score.py</span></p>
+<pre><code>score = <span class="n">100</span> × ( <span class="n">0.25</span>·wpm + <span class="n">0.25</span>·pitch_variation + <span class="n">0.20</span>·energy + <span class="n">0.30</span>·fluency )</code></pre>
+<table>
+  <tr><th style="width:22%">Sub-score</th><th style="width:10%">Weight</th><th>Curve</th></tr>
+  <tr><td>WPM</td><td>25%</td><td>1.0 inside 120–160; falls linearly to 0 at 60 WPM outside the band</td></tr>
+  <tr><td>Pitch variation</td><td>25%</td><td>0 at σ=0; 0.4 at σ=15; 1.0 at σ≥35, linear between</td></tr>
+  <tr><td>Energy</td><td>20%</td><td>Piecewise: 0 below −45 dBFS, ramps to 1.0 at −36, flat to −12, decays to 0.4</td></tr>
+  <tr><td>Fluency</td><td>30%</td><td>1.0 at zero fillers; 0 at twice the "high" rate (0.16 per word)</td></tr>
+</table>
+<div class="box"><span class="lbl">Design note</span>
+<p>The energy sub-score was a three-step ladder (0.3 / 1.0 / 0.5). A speaker drifting quiet
+fell off a cliff rather than sliding. It is now piecewise-linear on the dBFS axis, so the
+score tracks the drift continuously.</p></div>
+
+<h3>8.2 Fitting the weights — and what the data actually supports</h3>
+<p>25/25/20/30 is not derived from data; it is a plausible prior.
+<span class="fileref">training/train_confidence_scorer.py</span> fits it against
+speechocean762's human ratings, keeping the sub-score <em>functions</em> — which encode real
+domain knowledge — and fitting only their combination, so the output drops straight back
+into config.</p>
+<p>Measured on 400 utterances, target <code>fluency</code>: <b>R² = 0.20</b>.</p>
+<table>
+  <tr><th style="width:26%">Weight</th><th style="width:20%">Current → fitted</th><th>Verdict</th></tr>
+  <tr><td>wpm</td><td>0.25 → 0.39</td><td>Trustworthy — σ 0.32, real variation</td></tr>
+  <tr><td>pitch_variation</td><td>0.25 → 0.38</td><td>Trustworthy — σ 0.22</td></tr>
+  <tr><td>energy</td><td>0.20 → <s>0.10</s></td><td><b>Unreliable</b> — σ 0.010; studio recordings all at one level</td></tr>
+  <tr><td>filler_usage</td><td>0.30 → <s>0.13</s></td><td><b>Unreliable</b> — 95% of clips contain zero fillers</td></tr>
+</table>
+<div class="box warn"><span class="lbl">Why the weights are not yet adopted</span>
+<p>A regression will happily assign a confident weight to a feature that never varies. The
+script detects near-constant features, refuses to endorse their weights, keeps the existing
+values, and renormalises the rest. Two of the four numbers here are meaningless, so importing
+all four would make the score <em>worse</em> while looking more scientific.</p>
+<p>speechocean762 is read speech scored for pronunciation, not spontaneous public speaking.
+Closing this properly needs a corpus of rated spontaneous delivery — none is openly
+available.</p></div>
+
+<h3>8.3 Feedback engine</h3>
+<p>Threshold rules over five categories — loudness, pitch, pitch variation, speed, fillers,
+pauses — each producing a message typed <code>info</code>, <code>success</code>, or <code>warning</code>.
+Overall status derives from the warning count: <code>excellent</code> (zero warnings) through
+<code>poor</code> (four or more), with <code>silent</code> short-circuiting everything.</p>
+<p>Pitch messages are suppressed entirely when nothing voiced was detected, rather than
+reporting a confident 0 Hz.</p>
+
+<h3>8.4 LLM coaching line</h3>
+<p><span class="fileref">backend/services/llm_feedback.py</span> — optional, via OpenRouter.</p>
+<p>Defended on three fronts, because it sits on the critical path of every chunk:</p>
+<ul>
+  <li><b>Timeout and single retry</b> — a slow provider cannot stall the request indefinitely. The original client had no timeout at all.</li>
+  <li><b>Per-session throttle</b> — a 2.5 s cadence would otherwise mean ~24 paid calls per minute per speaker. Default minimum interval of 8 s cuts that to ~7, and the slot is reserved under a lock so concurrent chunks cannot both pass.</li>
+  <li><b>Transcript cap</b> — prompt size stays bounded regardless of session length.</li>
+</ul>
+<p>Every failure path returns <code>None</code> and the rule-based message is promoted instead.</p>
+</div>
+
+<!-- ============================ 9 ============================ -->
+<div class="part">
+<h2>9 · Session Layer</h2>
+<p><span class="fileref">backend/services/session_store.py</span></p>
+
+<p>Without sessions every chunk was analysed in isolation and discarded. Four capabilities
+depend on cross-chunk state:</p>
+
+<h3>9.1 Cumulative totals</h3>
+<p>Filler and keyword counts previously lived only in browser memory and vanished on
+refresh. They now accumulate server-side and ride back with every response.</p>
+
+<h3>9.2 EMA smoothing</h3>
+<p>A confidence score computed from 2.5 s of audio is statistically noisy — one word is
+24 WPM of granularity. Exponential moving averages give a trend line:</p>
+<pre><code>ema = α · value + (<span class="n">1</span> − α) · previous          <span class="c"># α = 0.4, seeded by the first observation</span></code></pre>
+<p>The frontend displays <code>confidence_smoothed</code> when present. Peak confidence is tracked
+separately as the raw maximum.</p>
+
+<h3>9.3 Adaptive silence gate</h3>
+<p>A fixed threshold cannot tell a quiet microphone from a quiet room. The session tracks
+recent chunk loudness and derives a gate from the 10th percentile plus 8 dB headroom:</p>
+<pre><code>gate = max(HARD_FLOOR, min(ABSOLUTE_SILENCE, p10 + <span class="n">8</span>))</code></pre>
+<div class="box good"><span class="lbl">Deliberately asymmetric</span>
+<p>The absolute threshold is a <em>ceiling</em>, never a floor. A quiet microphone lowers the
+gate so speech still reaches the transcriber; a noisy room can never raise it and start
+transcribing background hiss. The hard floor at −60 dBFS bounds it below.</p></div>
+
+<h3>9.4 Decoder context</h3>
+<p>The transcript tail feeds the next chunk's <code>initial_prompt</code> (§6.3).</p>
+
+<h3>9.5 Storage and eviction</h3>
+<p>In-process, TTL-bounded, guarded by a reentrant lock. Sessions are ephemeral coaching
+state, not records worth a database; reports are handed to the client as JSON to persist
+wherever it likes. Expired sessions are dropped on access, and capacity overflow evicts
+oldest-first.</p>
+<div class="box bad"><span class="lbl">Bug caught by the test suite</span>
+<p>Pruning ran <em>before</em> insertion, so it measured capacity without the incoming
+session and the store settled one over <code>max_sessions</code>. Fixed by inserting first, then
+pruning.</p></div>
+</div>
+
+<!-- ============================ 10 ============================ -->
+<div class="part">
+<h2>10 · Deep Learning Layer</h2>
+<p><span class="fileref">backend/services/ml/</span> — eight models, all off by default.</p>
+
+<h3>10.1 The contract</h3>
+<p>Every module exposes <code>is_enabled()</code> and an analysis function, returns <code>None</code>
+when the feature is off or its dependency is absent, and never raises into the request path.
+That contract is what keeps a base <code>pip install -r requirements.txt</code> fully valid.</p>
+
+<h3>10.2 The registry</h3>
+<p>One component owns loading, caching, and reporting. Lazy (nothing imported until first
+use — importing torch alone costs seconds), once (per-model load lock), optional (a missing
+package disables one feature and records why), and serialised (torch modules are not
+concurrency-safe).</p>
+<p>A model that fails to load is never retried, so a broken dependency costs one startup
+attempt rather than an attempt per request.</p>
+
+<h3>10.3 The eight models</h3>
+<table>
+  <tr><th style="width:20%">Model</th><th style="width:26%">Replaces / adds</th><th style="width:14%">Warm cost</th><th>Notes</th></tr>
+  <tr><td><b>CREPE</b> pitch</td><td>Autocorrelation pitch</td><td>~780 ms</td><td>CNN trained to read f0 from waveform; far better on real speech than DSP</td></tr>
+  <tr><td><b>Silero</b> VAD</td><td>Energy silence gate</td><td>~270 ms</td><td>Genuinely distinguishes speech from noise</td></tr>
+  <tr><td><b>Disfluency</b></td><td>Adds acoustic fillers</td><td>—</td><td>Requires a trained checkpoint; see §10.4</td></tr>
+  <tr><td><b>wav2vec2 SER</b></td><td>Adds emotion, tension</td><td>~385 ms</td><td>Delivery affect the transcript cannot carry</td></tr>
+  <tr><td><b>ECAPA-TDNN</b></td><td>Adds speaker embedding</td><td>~375 ms</td><td>192-dim; verifies speaker continuity across sessions</td></tr>
+  <tr><td><b>pyannote</b></td><td>Adds diarization</td><td>session-level</td><td>Gated model; needs HF token and accepted terms</td></tr>
+  <tr><td><b>openSMILE</b></td><td>Adds 88 eGeMAPS features</td><td>~1600 ms</td><td>Jitter, shimmer, HNR. Too slow for the live path</td></tr>
+  <tr><td><b>WhisperX</b></td><td>Adds word timestamps</td><td>varies</td><td>Located pauses, articulation rate</td></tr>
+</table>
+
+<div class="box warn"><span class="lbl">You cannot enable everything</span>
+<p>The per-chunk models sum to roughly 3.4 s against a 2.5 s budget on CPU. The pairing that
+earns its cost is <b>CREPE + Silero (~1050 ms, 42%)</b>. openSMILE belongs offline, building
+training features, not on the live path. A GPU changes the arithmetic entirely.</p></div>
+
+<h3>10.4 Why the acoustic filler detector must exist</h3>
+<div class="box bad"><span class="lbl">A structural limitation, not a tuning problem</span>
+<p>Whisper was trained largely on cleaned transcripts and <b>routinely deletes "um" and
+"uh"</b>. Enabling its VAD filter trims the hesitation regions as well. So transcript-based
+filler counting under-counts <em>structurally</em> — no regex improvement can fix it, because
+the evidence has already been deleted before the text is produced. It survives only in the
+waveform.</p></div>
+<p>No suitable public checkpoint exists, so <span class="fileref">training/train_filler_detector.py</span>
+fine-tunes a WavLM backbone into a frame-level classifier on PodcastFillers. Consecutive
+frames sharing a label collapse into one event, so forty frames of "um" count as one filler.</p>
+<h4>Merge strategy</h4>
+<p>Acoustic and text counts merge by <b>maximum per label, not sum</b>. When Whisper does keep
+an "um", both detectors see the same event and adding them would double-count it.</p>
+
+<h3>10.5 Two bugs found by running the models</h3>
+<div class="box bad"><span class="lbl">Emotion labels silently wrong</span>
+<p><code>superb/wav2vec2-base-superb-er</code> emits IEMOCAP abbreviations — <code>ang</code>,
+<code>hap</code>, <code>neu</code>, <code>sad</code> — not full words. The label sets contained only long
+spellings, so audio classified <b>98% angry scored tension 0.003</b>: a furious delivery
+reported as perfectly calm. Both vocabularies are now mapped, and unrecognised labels surface
+in <code>unmapped_labels</code> with a warning rather than reading as zero.</p></div>
+<div class="box bad"><span class="lbl">SpeechBrain broken on Windows</span>
+<p>ECAPA failed with <code>WinError 1314: A required privilege is not held</code>. SpeechBrain
+symlinks model files out of the Hugging Face cache, and Windows refuses without Developer
+Mode or admin rights. The loader now requests real copies via
+<code>LocalStrategy.COPY_SKIP_CACHE</code>, with a fallback for older releases.</p></div>
+</div>
+
+<!-- ============================ 11 ============================ -->
+<div class="part">
+<h2>11 · Security &amp; Middleware</h2>
+<p><span class="fileref">backend/middleware.py</span></p>
+
+<h3>11.1 Order</h3>
+<p>Starlette runs the most recently added middleware first, so registration is inside-out.
+Execution order: <b>CORS → Request ID → Rate limit → API key → route</b>. CORS outermost means
+even a 401 or 429 is properly decorated.</p>
+
+<h3>11.2 Protections</h3>
+<table>
+  <tr><th style="width:24%">Control</th><th>Behaviour</th></tr>
+  <tr><td>Request IDs</td><td>Generated or preserved from <code>X-Request-ID</code>, echoed back, bound to a contextvar so log lines trace to the response the caller saw</td></tr>
+  <tr><td>Rate limiting</td><td>Per-client token bucket on <code>/api</code>, default 120/min. Returns 429 with <code>Retry-After</code></td></tr>
+  <tr><td>API key</td><td>Optional. When <code>API_KEY</code> is set, <code>/api</code> requires <code>X-API-Key</code>, compared in constant time. <code>/api/health</code> stays public so load balancers can probe</td></tr>
+  <tr><td>Upload caps</td><td>Byte limit enforced during streaming; duration limit enforced during decode</td></tr>
+  <tr><td>Error shape</td><td>One JSON shape everywhere; internals never leak</td></tr>
+</table>
+
+<h3>11.3 Vulnerabilities fixed</h3>
+<div class="box bad"><span class="lbl">Traceback disclosure</span>
+<p>The original error handler returned <code>traceback.format_exc()</code> in the response body,
+exposing file paths and internal structure to anyone who could trigger an error. The
+traceback now goes to logs only; detail appears in responses only under <code>DEBUG</code>.</p></div>
+<div class="box bad"><span class="lbl">Invalid CORS combination</span>
+<p><code>allow_origins=["*"]</code> with <code>allow_credentials=True</code> is forbidden by the CORS
+specification and rejected by browsers outright. Credentials are now enabled only alongside
+explicit origins.</p></div>
+<div class="box bad"><span class="lbl">Transcript HTML injection</span>
+<p>The frontend injected transcript text via <code>innerHTML</code> for highlighting, without
+escaping. Text is now escaped before highlight spans are added, and regex metacharacters in
+filler and keyword names are escaped too.</p></div>
+<div class="box warn"><span class="lbl">Cost exposure</span>
+<p><code>/api/analyze</code> can spend money at a cloud provider on every call. On a publicly
+reachable instance, set <code>API_KEY</code> — otherwise anyone can drain your Groq and OpenRouter
+credit.</p></div>
+</div>
+
+<!-- ============================ 12 ============================ -->
+<div class="part">
+<h2>12 · API Reference</h2>
+
+<table>
+  <tr><th style="width:10%">Method</th><th style="width:30%">Endpoint</th><th>Purpose</th></tr>
+  <tr><td>POST</td><td><code>/api/analyze</code></td><td>Analyse one chunk. Multipart: <code>audio_file</code>, optional <code>session_id</code></td></tr>
+  <tr><td>POST</td><td><code>/api/diarize</code></td><td>Segment a <b>full recording</b> by speaker. Separate from /analyze because 2.5 s cannot separate voices</td></tr>
+  <tr><td>POST</td><td><code>/api/session</code></td><td>Open a session → <code>session_id</code></td></tr>
+  <tr><td>GET</td><td><code>/api/session/{id}</code></td><td>Rolling totals and smoothed averages</td></tr>
+  <tr><td>GET</td><td><code>/api/session/{id}/report</code></td><td>Full report with stitched transcript</td></tr>
+  <tr><td>DELETE</td><td><code>/api/session/{id}</code></td><td>Close session, return final report</td></tr>
+  <tr><td>GET</td><td><code>/api/status</code></td><td>Lightweight readiness probe</td></tr>
+  <tr><td>GET</td><td><code>/api/health</code></td><td>Deep check: engine, model state, LLM, sessions, ML registry</td></tr>
+  <tr><td>GET</td><td><code>/docs</code></td><td>Interactive OpenAPI documentation</td></tr>
+</table>
+
+<p>Audio may be any format libsndfile reads — WAV, FLAC, OGG — at any sample rate.</p>
+
+<h3>12.1 Response fields</h3>
+<table>
+  <tr><th style="width:26%">Field</th><th style="width:14%">Type</th><th>Meaning</th></tr>
+  <tr><td><code>message</code></td><td>string</td><td>Headline coaching line (LLM or promoted rule)</td></tr>
+  <tr><td><code>pitch</code>, <code>pitch_std</code></td><td>float</td><td>Mean and σ over voiced frames, Hz</td></tr>
+  <tr><td><code>voiced_ratio</code></td><td>0–1</td><td>Fraction of frames carrying pitch</td></tr>
+  <tr><td><code>energy</code>, <code>energy_db</code></td><td>float</td><td>RMS and dBFS</td></tr>
+  <tr><td><code>pause_ratio</code>, <code>longest_pause_sec</code></td><td>float</td><td>Silence fraction and longest run</td></tr>
+  <tr><td><code>wpm</code></td><td>float</td><td>Words per minute for this chunk</td></tr>
+  <tr><td><code>fillers</code></td><td>object</td><td>Total, rate, per-word breakdown, word count</td></tr>
+  <tr><td><code>keywords</code></td><td>object</td><td>Total, per-keyword counts, list</td></tr>
+  <tr><td><code>clarity</code>, <code>lexical_diversity</code></td><td>int, float</td><td>MATTR-based score and raw TTR</td></tr>
+  <tr><td><code>confidence_score</code></td><td>0–100</td><td>This chunk only</td></tr>
+  <tr><td><code>confidence_smoothed</code></td><td>0–100 / null</td><td>Session EMA — <b>prefer this for display</b></td></tr>
+  <tr><td><code>confidence_breakdown</code></td><td>object</td><td>Four sub-scores, each 0–100</td></tr>
+  <tr><td><code>feedback</code></td><td>array</td><td>Messages with <code>text</code>, <code>type</code>, <code>category</code></td></tr>
+  <tr><td><code>status</code></td><td>string</td><td>silent / poor / needs_improvement / good / excellent</td></tr>
+  <tr><td><code>degraded</code></td><td>bool</td><td>Part of the pipeline failed; result incomplete</td></tr>
+  <tr><td><code>warnings</code></td><td>array</td><td>Machine-readable reasons</td></tr>
+  <tr><td><code>source_sample_rate</code></td><td>int</td><td>Rate of the uploaded audio before resampling</td></tr>
+  <tr><td><code>engines</code></td><td>object</td><td>Which engine produced each metric</td></tr>
+  <tr><td><code>emotion</code>, <code>prosody</code>, <code>disfluency</code>, <code>alignment</code></td><td>object / null</td><td>Neural extras; null unless enabled</td></tr>
+</table>
+
+<h3>12.2 Degraded responses</h3>
+<p>A failed transcription no longer fabricates a confidence score. Acoustic metrics remain
+genuine, so they are returned and the response is flagged. Warning codes:</p>
+<table>
+  <tr><th style="width:34%">Code</th><th>Meaning</th></tr>
+  <tr><td><code>silence_skipped</code></td><td>Chunk was below the gate; STT deliberately not run</td></tr>
+  <tr><td><code>stt_unavailable</code></td><td>Every transcription engine failed</td></tr>
+  <tr><td><code>confidence_acoustic_only</code></td><td>WPM and filler sub-scores are not evidence-backed</td></tr>
+  <tr><td><code>session_not_found</code></td><td>Supplied session ID expired or does not exist</td></tr>
+  <tr><td><code>speaker_changed</code></td><td>Voice no longer matches the session reference embedding</td></tr>
+</table>
+</div>
+
+<!-- ============================ 13 ============================ -->
+<div class="part">
+<h2>13 · Configuration Reference</h2>
+<p><span class="fileref">backend/utils/config.py</span> — <code>.env</code> is loaded exactly once,
+resolved against the project root so behaviour does not depend on the working directory.</p>
+<div class="box bad"><span class="lbl">Bug this fixed</span>
+<p><code>load_dotenv</code> was called twice with different paths. One module resolved the project
+root; another called it bare, depending on the current directory. Running the server from
+elsewhere silently disabled the LLM.</p></div>
+
+<h3>13.1 Server &amp; limits</h3>
+<table>
+  <tr><th style="width:34%">Variable</th><th style="width:18%">Default</th><th>Purpose</th></tr>
+  <tr><td><code>HOST</code> / <code>PORT</code></td><td>0.0.0.0 / 8000</td><td>Bind address</td></tr>
+  <tr><td><code>DEBUG</code></td><td>false</td><td>Include error detail in responses</td></tr>
+  <tr><td><code>LOG_LEVEL</code></td><td>INFO</td><td>Logger verbosity</td></tr>
+  <tr><td><code>CORS_ORIGINS</code></td><td>*</td><td>Comma-separated allowed origins</td></tr>
+  <tr><td><code>MAX_UPLOAD_BYTES</code></td><td>10485760</td><td>Upload size cap</td></tr>
+  <tr><td><code>MAX_AUDIO_SECONDS</code></td><td>30</td><td>Decoded duration cap</td></tr>
+  <tr><td><code>RATE_LIMIT_PER_MINUTE</code></td><td>120</td><td>Per-client cap; 0 disables</td></tr>
+  <tr><td><code>API_KEY</code></td><td>—</td><td>When set, <code>/api</code> requires <code>X-API-Key</code></td></tr>
+</table>
+
+<h3>13.2 Speech &amp; language</h3>
+<table>
+  <tr><th style="width:34%">Variable</th><th style="width:18%">Default</th><th>Purpose</th></tr>
+  <tr><td><code>STT_ENGINE</code></td><td>auto</td><td>auto / local / groq / openai</td></tr>
+  <tr><td><code>GROQ_API_KEY</code></td><td>—</td><td>Enables Groq Whisper</td></tr>
+  <tr><td><code>OPENAI_API_KEY</code></td><td>—</td><td>Enables OpenAI Whisper</td></tr>
+  <tr><td><code>WHISPER_MODEL</code></td><td>tiny.en</td><td>Local faster-whisper model</td></tr>
+  <tr><td><code>WHISPER_COMPUTE_TYPE</code></td><td>int8</td><td>Quantisation</td></tr>
+  <tr><td><code>WHISPER_VAD_FILTER</code></td><td>true</td><td>Trim silence before decoding</td></tr>
+  <tr><td><code>OPENROUTER_API_KEY</code></td><td>—</td><td>Enables the LLM coaching line</td></tr>
+  <tr><td><code>LLM_TIMEOUT_SECONDS</code></td><td>4</td><td>Hard timeout</td></tr>
+  <tr><td><code>LLM_MIN_INTERVAL_SECONDS</code></td><td>8</td><td>Cost cap per session</td></tr>
+</table>
+
+<h3>13.3 Sessions &amp; ML</h3>
+<table>
+  <tr><th style="width:34%">Variable</th><th style="width:18%">Default</th><th>Purpose</th></tr>
+  <tr><td><code>SESSION_TTL_SECONDS</code></td><td>3600</td><td>Idle expiry</td></tr>
+  <tr><td><code>MAX_SESSIONS</code></td><td>500</td><td>Capacity before oldest-first eviction</td></tr>
+  <tr><td><code>SMOOTHING_ALPHA</code></td><td>0.4</td><td>EMA factor</td></tr>
+  <tr><td><code>HF_TOKEN</code></td><td>—</td><td>Gated models and datasets</td></tr>
+  <tr><td><code>ML_DEVICE</code></td><td>auto</td><td>auto / cpu / cuda / mps</td></tr>
+  <tr><td><code>ML_TORCH_THREADS</code></td><td>2</td><td>Caps intra-op threads so inference does not starve the request threadpool</td></tr>
+  <tr><td><code>ML_WARMUP</code></td><td>true</td><td>Load enabled models at startup</td></tr>
+  <tr><td><code>ML_PITCH_ENABLED</code></td><td>false</td><td>CREPE</td></tr>
+  <tr><td><code>ML_VAD_ENABLED</code></td><td>false</td><td>Silero</td></tr>
+  <tr><td><code>ML_DISFLUENCY_ENABLED</code> / <code>_MODEL</code></td><td>false / —</td><td>Acoustic fillers</td></tr>
+  <tr><td><code>ML_EMOTION_ENABLED</code></td><td>false</td><td>Speech emotion</td></tr>
+  <tr><td><code>ML_SPEAKER_ENABLED</code></td><td>false</td><td>ECAPA embeddings</td></tr>
+  <tr><td><code>ML_DIARIZATION_ENABLED</code></td><td>false</td><td>pyannote</td></tr>
+  <tr><td><code>ML_PROSODY_ENABLED</code></td><td>false</td><td>openSMILE eGeMAPS</td></tr>
+  <tr><td><code>ML_ALIGNMENT_ENABLED</code></td><td>false</td><td>Word timestamps</td></tr>
+</table>
+</div>
+
+<!-- ============================ 14 ============================ -->
+<div class="part">
+<h2>14 · Datasets &amp; Training</h2>
+<p><span class="fileref">scripts/datasets.py</span> · <span class="fileref">DATASETS.md</span></p>
+
+<pre><code>python scripts/datasets.py list      <span class="c"># 14 corpora with size and licence</span>
+python scripts/datasets.py check     <span class="c"># what is ready vs. blocked on you</span>
+python scripts/datasets.py info podcastfillers
+python scripts/datasets.py download speechocean762</code></pre>
+
+<h3>14.1 Access classes</h3>
+<table>
+  <tr><th style="width:18%">Class</th><th>Meaning</th></tr>
+  <tr><td><b>OPEN</b></td><td>Downloads immediately, no account</td></tr>
+  <tr><td><b>HF_AUTH</b></td><td>Free Hugging Face account plus clicking "agree" on the dataset page</td></tr>
+  <tr><td><b>REQUEST</b></td><td>A form, academic affiliation, or signature — days, not minutes</td></tr>
+  <tr><td><b>PAID</b></td><td>LDC membership or per-corpus fee</td></tr>
+</table>
+<div class="box warn"><span class="lbl">What cannot be automated</span>
+<p>Accepting a licence is a legal act performed by a named person. It cannot be scripted or
+delegated — the account and the agreement must be yours. Everything <em>after</em> acceptance
+is automated: once <code>HF_TOKEN</code> is set, <code>download</code> handles the rest.</p></div>
+
+<h3>14.2 The corpora that matter</h3>
+<table>
+  <tr><th style="width:22%">Dataset</th><th style="width:18%">Task</th><th style="width:12%">Size</th><th style="width:16%">Access</th><th>Why</th></tr>
+  <tr><td><b>PodcastFillers</b></td><td>Filler detection</td><td>~40 GB</td><td>Request</td><td>The only corpus built for this. Timed um/uh events</td></tr>
+  <tr><td><b>speechocean762</b></td><td>Scoring</td><td>409 MB</td><td>Open ✓</td><td>Human delivery ratings, open licence. <b>Downloaded</b></td></tr>
+  <tr><td>AMI Meeting</td><td>Disfluency</td><td>~10 GB</td><td>HF auth</td><td>Natural disfluent speech, CC BY — commercial-safe</td></tr>
+  <tr><td>TED-LIUM 3</td><td>Public speaking</td><td>~54 GB</td><td>HF auth</td><td>450 h of actual prepared oratory</td></tr>
+  <tr><td>Common Voice</td><td>ASR</td><td>~80 GB</td><td>HF auth</td><td>CC0. Read speech — wrong for filler models</td></tr>
+  <tr><td>VoxPopuli</td><td>Public speaking</td><td>~30 GB</td><td>HF auth</td><td>CC0, formal oratory</td></tr>
+  <tr><td>LibriSpeech</td><td>ASR</td><td>~60 GB</td><td>Open</td><td>No account at all. Read speech, no disfluencies</td></tr>
+  <tr><td>Switchboard</td><td>Disfluency</td><td>~25 GB</td><td>Paid</td><td>Canonical disfluency annotations</td></tr>
+  <tr><td>Buckeye</td><td>Disfluency</td><td>~5 GB</td><td>Request</td><td>Free alternative to Switchboard</td></tr>
+  <tr><td>RAVDESS / CREMA-D</td><td>Emotion</td><td>1.5–2 GB</td><td>Open</td><td>Acted; transfer imperfectly</td></tr>
+  <tr><td>IEMOCAP / MSP-Podcast</td><td>Emotion</td><td>12–30 GB</td><td>Request</td><td>MSP is natural, not acted</td></tr>
+  <tr><td>VoxCeleb1</td><td>Speaker</td><td>~35 GB</td><td>Request</td><td>Rarely needed — use pretrained ECAPA</td></tr>
+</table>
+
+<h3>14.3 Licences drive what you can ship</h3>
+<div class="box warn"><span class="lbl">Read before training</span>
+<p>A model generally inherits its training data's restrictions. <b>PodcastFillers and
+TED-LIUM are non-commercial.</b> If SpeakTwin is ever commercial, build only on CC0 / CC BY
+corpora: Common Voice, VoxPopuli, AMI, speechocean762, LibriSpeech.</p></div>
+
+<h3>14.4 Training the filler detector</h3>
+<pre><code>python training/train_filler_detector.py \
+    --data-dir data/podcastfillers --build-manifest \
+    --output-dir models/filler-detector \
+    --backbone microsoft/wavlm-base-plus --epochs <span class="n">3</span> --fp16</code></pre>
+<p>Frame labels are overwhelmingly the negative class, so the script reports positive-class
+precision, recall, and F1 alongside accuracy. <b>Accuracy alone will look excellent while the
+model predicts "none" for everything.</b></p>
+
+<h3>14.5 Compute</h3>
+<p>No GPU is needed to <em>run</em> SpeakTwin. Training on CPU is not practical.</p>
+<table>
+  <tr><th style="width:26%">Option</th><th>Notes</th></tr>
+  <tr><td>Kaggle Notebooks</td><td>~30 GPU-hours/week free — best free tier for this size of fine-tune</td></tr>
+  <tr><td>Google Colab</td><td>Free T4; Pro for A100/L4</td></tr>
+  <tr><td>RunPod / Vast.ai</td><td>~$0.20–0.60/hr; a full fine-tune is a few hours</td></tr>
+  <tr><td>Modal / Lightning AI</td><td>Serverless GPU; same code for training and inference</td></tr>
+</table>
+</div>
+
+<!-- ============================ 15 ============================ -->
+<div class="part">
+<h2>15 · Frontend</h2>
+<p><span class="fileref">frontend/</span> — vanilla HTML, CSS, and JavaScript. No framework, no build step.</p>
+
+<h3>15.1 Capture chain</h3>
+<pre><code>getUserMedia → AudioContext(<span class="n">16000</span>) → MediaStreamSource
+             → ScriptProcessorNode(<span class="n">4096</span>) → accumulate
+             → encodeWav(samples, actualSampleRate) → POST</code></pre>
+<p>The WAV encoder is hand-written: a 44-byte RIFF header followed by 16-bit PCM converted
+from Float32. Sending WAV rather than the browser's native WebM/Opus means the backend never
+needs a codec beyond libsndfile.</p>
+
+<h3>15.2 Rendering</h3>
+<table>
+  <tr><th style="width:30%">Element</th><th>Behaviour</th></tr>
+  <tr><td>Energy / pitch meters</td><td>20 bars each, height scaled by normalised level</td></tr>
+  <tr><td>Confidence ring</td><td>SVG <code>stroke-dashoffset</code>; colour steps by band. Prefers <code>confidence_smoothed</code></td></tr>
+  <tr><td>Breakdown bars</td><td>Four sub-scores as width percentages</td></tr>
+  <tr><td>Transcript</td><td>Escaped, then keyword (green) and filler (red) spans injected</td></tr>
+  <tr><td>Filler / keyword pills</td><td>Server session totals when available; local accumulation otherwise</td></tr>
+</table>
+
+<h3>15.3 Bugs fixed</h3>
+<div class="box bad"><span class="lbl">Static assets 404 at the root</span>
+<p><code>index.html</code> loads <code>style.css</code> and <code>app.js</code> with relative paths, but the
+frontend directory was mounted only at <code>/static</code> — so from <code>/</code> those resolved to
+<code>/style.css</code> and 404'd. The directory is now mounted at both <code>/static</code> and
+<code>/</code>, registered after the API router so <code>/api/*</code> still wins.</p></div>
+<div class="box bad"><span class="lbl">Hardcoded port mismatch</span>
+<p><code>API_BASE</code> pointed at <code>localhost:8002</code> while the server defaulted to 8001 and the
+README said 8000. Now same-origin by default, overridable via
+<code>window.SPEAKTWIN_API_BASE</code>.</p></div>
+</div>
+
+<!-- ============================ 16 ============================ -->
+<div class="part">
+<h2>16 · Testing &amp; Deployment</h2>
+
+<h3>16.1 Test suite — 158 tests</h3>
+<table>
+  <tr><th style="width:34%">File</th><th>Covers</th></tr>
+  <tr><td><code>test_audio.py</code></td><td>Decode, resample, mono-mix, energy, pitch on known tones, pause detection</td></tr>
+  <tr><td><code>test_text_analysis.py</code></td><td>Tokeniser, every filler context rule, keyword n-grams, MATTR stability</td></tr>
+  <tr><td><code>test_scoring.py</code></td><td>Confidence curves, sub-score ranges, feedback status transitions</td></tr>
+  <tr><td><code>test_session_store.py</code></td><td>Lifecycle, aggregation, smoothing, adaptive gate, eviction</td></tr>
+  <tr><td><code>test_api.py</code></td><td>End-to-end: schema, validation, degraded path, sessions, static serving</td></tr>
+  <tr><td><code>test_middleware.py</code></td><td>Rate limiting, API key, request IDs</td></tr>
+  <tr><td><code>test_ml.py</code></td><td>Optional-by-default contract, registry, merge logic, event collapsing</td></tr>
+</table>
+<p>Tests that need a real neural model are <em>skipped</em>, not failed, so the suite stays
+green on a base install.</p>
+
+<h3>16.2 What the tests caught</h3>
+<p>Three defects were found by the suite rather than in production: the pitch boundary bug
+(§5.2), the session eviction off-by-one (§9.5), and a namespace collision where the registry
+instance shadowed the registry module, making it unreachable by dotted path.</p>
+
+<h3>16.3 Deployment</h3>
+<pre><code><span class="c"># Base (~1 GB) - DSP + Whisper, no neural extras</span>
+docker build -t speaktwin .
+
+<span class="c"># With the DL layer (~3-4 GB) - CPU torch + all models</span>
+docker build -f Dockerfile.ml -t speaktwin:ml .
+docker run -p <span class="n">8000</span>:<span class="n">8000</span> --env-file .env speaktwin:ml</code></pre>
+<p>The image installs <code>libsndfile1</code>, pre-downloads Whisper weights into an image layer,
+and runs unprivileged as UID 10001 with a health check.</p>
+<div class="box warn"><span class="lbl">Single worker, deliberately</span>
+<p>The session store and rate limiter are in-process. Multiple workers would each keep their
+own copy — sessions would appear and disappear depending on which worker served the request.
+Scaling past one replica requires moving both to a shared backend such as Redis.</p></div>
+
+<h3>16.4 CI</h3>
+<p>Three jobs: the base suite across Python 3.10–3.12 <em>without</em> ML extras, an
+<code>ml-extras</code> job that installs CPU torch and asserts the neural layer stays inert by
+default, and a Docker build.</p>
+</div>
+
+<!-- ============================ 17 ============================ -->
+<div class="part">
+<h2>17 · Technology Choices</h2>
+
+<h3>17.1 What is used, and why</h3>
+<table>
+  <tr><th style="width:20%">Choice</th><th style="width:30%">Alternatives considered</th><th>Reasoning</th></tr>
+  <tr><td>FastAPI</td><td>Flask, Django, Express</td><td>Native async, Pydantic validation, automatic OpenAPI</td></tr>
+  <tr><td>soundfile + scipy</td><td>librosa, ffmpeg, pydub</td><td>librosa drags in numba (~50 MB) for functions we replaced with 40 lines of numpy. ffmpeg is a system dependency</td></tr>
+  <tr><td>faster-whisper</td><td>openai-whisper, Vosk, wav2vec2</td><td>CTranslate2 int8 is ~4× faster than reference Whisper at similar accuracy</td></tr>
+  <tr><td>Vanilla JS</td><td>React, Vue, Svelte</td><td>The UI is one page of meters. A build step would cost more than it returns</td></tr>
+  <tr><td>In-process sessions</td><td>Redis, Postgres</td><td>Sessions are ephemeral coaching state. A database is the right call only when history must outlive the process</td></tr>
+  <tr><td>Pydantic schemas</td><td>Raw dicts</td><td>Untyped dicts are exactly how the README drifted out of sync with its own routes</td></tr>
+</table>
+
+<h3>17.2 What could be used next</h3>
+<table>
+  <tr><th style="width:24%">Upgrade</th><th style="width:20%">Replaces</th><th>Value</th></tr>
+  <tr><td>WebSocket transport</td><td>Chunked POST</td><td>Chunked POST has a hard ~2.5 s latency floor. Streaming removes it</td></tr>
+  <tr><td>Redis session store</td><td>In-process dict</td><td>Unlocks multi-worker and multi-replica scaling</td></tr>
+  <tr><td>Learned confidence model</td><td>Hand-weighted average</td><td>speechocean762 supervision replaces guessed weights (§8.2)</td></tr>
+  <tr><td>Word-level timestamps</td><td>Frame-based pauses</td><td>Locates pauses between specific words; enables playback-synced highlighting</td></tr>
+  <tr><td>AudioWorklet</td><td>ScriptProcessorNode</td><td>ScriptProcessorNode is deprecated; AudioWorklet runs off the main thread</td></tr>
+  <tr><td>Whisper <code>small.en</code> / cloud</td><td><code>tiny.en</code></td><td>Materially better accuracy; costs latency or money</td></tr>
+  <tr><td>Postgres + auth</td><td>No persistence</td><td>Progress tracking across sessions and devices</td></tr>
+  <tr><td>MediaPipe camera module</td><td>—</td><td>Posture, eye contact, gesture — the placeholder already anticipates it</td></tr>
+</table>
+
+<h3>17.3 Rejected, and why</h3>
+<ul>
+  <li><b>Server-side microphone capture</b> — impossible on a deployed server; retained only as legacy.</li>
+  <li><b>librosa in the request path</b> — heavy dependency for functionality replaced in pure numpy. It returns only as a transitive dependency of torchcrepe in the ML extras.</li>
+  <li><b>Root TTR for clarity</b> — length-normalises in the wrong direction for short chunks; MATTR chosen instead.</li>
+  <li><b>Audio overlap between chunks</b> — would duplicate words at seams. Decoder prompt carryover achieves the same benefit without the deduplication problem.</li>
+  <li><b>Summing acoustic and text filler counts</b> — double-counts the same event; maximum-per-label used instead.</li>
+</ul>
+</div>
+
+<!-- ============================ 18 ============================ -->
+<div class="part">
+<h2>18 · Limitations &amp; Roadmap</h2>
+
+<h3>18.1 Honest limitations</h3>
+<table>
+  <tr><th style="width:30%">Limitation</th><th>Detail</th></tr>
+  <tr><td>Confidence weights unfitted</td><td>25/25/20/30 is a plausible prior, not a measured result</td></tr>
+  <tr><td>Filler counts under-report</td><td>Until the acoustic detector is trained, Whisper's deletions are invisible</td></tr>
+  <tr><td>WPM is noisy per chunk</td><td>One word is 24 WPM of granularity at 2.5 s. Use the session EMA</td></tr>
+  <tr><td>English only</td><td><code>tiny.en</code> and every rule assume English</td></tr>
+  <tr><td>Single worker</td><td>In-process session store and rate limiter</td></tr>
+  <tr><td>No persistence</td><td>Sessions die with the process; reports must be saved client-side</td></tr>
+  <tr><td>Loudness still gain-dependent</td><td>dBFS and the adaptive gate reduce but do not eliminate microphone sensitivity</td></tr>
+  <tr><td>ML budget is tight on CPU</td><td>Roughly two models fit inside 2.5 s</td></tr>
+</table>
+
+<h3>18.2 Roadmap</h3>
+<table>
+  <tr><th style="width:12%">Status</th><th style="width:30%">Item</th><th>Note</th></tr>
+  <tr><td>Done</td><td>Session history &amp; smoothing</td><td>Cross-chunk aggregation with EMA</td></tr>
+  <tr><td>Done</td><td>Export reports</td><td>JSON session reports</td></tr>
+  <tr><td>Done</td><td>Configurable thresholds</td><td>Every threshold via environment</td></tr>
+  <tr><td>Done</td><td>Deep learning layer</td><td>Eight optional models</td></tr>
+  <tr><td>Next</td><td>Train the filler detector</td><td>Blocked on PodcastFillers access</td></tr>
+  <tr><td>Next</td><td>Learned confidence scorer</td><td>speechocean762 is downloaded and ready</td></tr>
+  <tr><td>Later</td><td>WebSocket transport</td><td>Removes the latency floor</td></tr>
+  <tr><td>Later</td><td>Camera module</td><td>MediaPipe posture and eye contact</td></tr>
+  <tr><td>Later</td><td>Multimodal fusion</td><td>Combined audio + visual score</td></tr>
+</table>
+
+<h3>18.3 Immediate next actions</h3>
+<ol>
+  <li>Create a Hugging Face account; accept terms on AMI, TED-LIUM, Common Voice, VoxPopuli; set <code>HF_TOKEN</code>.</li>
+  <li>Submit the PodcastFillers request form — the long pole, since it is the only corpus that makes the filler detector trainable.</li>
+  <li>Fit the confidence weights against speechocean762, which is already on disk.</li>
+  <li>Before any public deployment: set <code>CORS_ORIGINS</code> to a real origin and set <code>API_KEY</code>.</li>
+</ol>
+</div>
+
+<!-- ============================ A ============================ -->
+<div class="part">
+<h2>Appendix A · File Map</h2>
+<table>
+  <tr><th style="width:38%">Path</th><th>Responsibility</th></tr>
+  <tr><td colspan="2" style="background:#f0eefb;font-weight:700">Application core</td></tr>
+  <tr><td><code>backend/main.py</code></td><td>App construction, CORS, error handlers, health, static mounts, lifespan warmup</td></tr>
+  <tr><td><code>backend/middleware.py</code></td><td>Request IDs, rate limiting, API-key auth</td></tr>
+  <tr><td><code>backend/schemas.py</code></td><td>Pydantic response models</td></tr>
+  <tr><td><code>backend/routes/analyze.py</code></td><td>Analysis endpoint and session lifecycle</td></tr>
+  <tr><td colspan="2" style="background:#f0eefb;font-weight:700">Services</td></tr>
+  <tr><td><code>services/audio_io.py</code></td><td>Decode, mono-mix, float32, resample, sanitise</td></tr>
+  <tr><td><code>services/audio_analysis.py</code></td><td>Energy, pitch, pause detection</td></tr>
+  <tr><td><code>services/speech_to_text.py</code></td><td>Hybrid STT routing and inference locking</td></tr>
+  <tr><td><code>services/filler_detection.py</code></td><td>Context-aware filler scanning</td></tr>
+  <tr><td><code>services/keyword_detection.py</code></td><td>Target keyword n-gram matching</td></tr>
+  <tr><td><code>services/clarity_analysis.py</code></td><td>MATTR clarity scoring</td></tr>
+  <tr><td><code>services/confidence_score.py</code></td><td>Weighted composite scoring</td></tr>
+  <tr><td><code>services/feedback_engine.py</code></td><td>Threshold-based coaching messages</td></tr>
+  <tr><td><code>services/llm_feedback.py</code></td><td>Throttled LLM insight via OpenRouter</td></tr>
+  <tr><td><code>services/session_store.py</code></td><td>Session state, smoothing, adaptive gate, reports</td></tr>
+  <tr><td><code>services/audio_capture.py</code></td><td>Legacy server-side microphone (unused)</td></tr>
+  <tr><td><code>services/camera_placeholder.py</code></td><td>Future MediaPipe body-language module</td></tr>
+  <tr><td colspan="2" style="background:#f0eefb;font-weight:700">Deep learning</td></tr>
+  <tr><td><code>services/ml/registry.py</code></td><td>Lazy loading, device resolution, per-model status</td></tr>
+  <tr><td><code>services/ml/enrichment.py</code></td><td>Orchestrates every enabled model per chunk</td></tr>
+  <tr><td><code>services/ml/pitch.py</code></td><td>CREPE neural pitch</td></tr>
+  <tr><td><code>services/ml/vad.py</code></td><td>Silero voice activity detection</td></tr>
+  <tr><td><code>services/ml/disfluency.py</code></td><td>Acoustic filler detection and merge logic</td></tr>
+  <tr><td><code>services/ml/emotion.py</code></td><td>wav2vec2 speech emotion recognition</td></tr>
+  <tr><td><code>services/ml/speaker.py</code></td><td>ECAPA embeddings and pyannote diarization</td></tr>
+  <tr><td><code>services/ml/prosody.py</code></td><td>openSMILE eGeMAPS features</td></tr>
+  <tr><td><code>services/ml/alignment.py</code></td><td>Word-level timestamps</td></tr>
+  <tr><td colspan="2" style="background:#f0eefb;font-weight:700">Utilities, tooling, frontend</td></tr>
+  <tr><td><code>utils/config.py</code></td><td>Single source of truth for environment settings</td></tr>
+  <tr><td><code>utils/helpers.py</code></td><td>Thresholds, dBFS conversion, logger</td></tr>
+  <tr><td><code>utils/text.py</code></td><td>Shared tokeniser with clause awareness</td></tr>
+  <tr><td><code>scripts/datasets.py</code></td><td>Dataset manager CLI</td></tr>
+  <tr><td><code>scripts/dataset_registry.py</code></td><td>14 corpora: size, licence, access class</td></tr>
+  <tr><td><code>training/train_filler_detector.py</code></td><td>WavLM fine-tuning pipeline</td></tr>
+  <tr><td><code>frontend/app.js</code></td><td>Web Audio capture, WAV encoding, UI rendering</td></tr>
+  <tr><td><code>frontend/index.html</code> · <code>style.css</code></td><td>Layout and glassmorphism dark theme</td></tr>
+</table>
+
+<div class="box" style="margin-top:8mm">
+<span class="lbl">Document provenance</span>
+<p>Every latency figure in this document was measured on the development machine
+(Windows 11, CPU-only, no NVIDIA GPU) after model warmup, not estimated. Every bug
+described was found and fixed during development, and each has a regression test.
+Test count and behaviour reflect the suite at time of writing: <b>158 passing</b>.</p>
+</div>
+</div>
+
+</body>
+</html>

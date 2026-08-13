@@ -1,0 +1,87 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.11", "3.12"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: Install libsndfile
+        run: sudo apt-get update && sudo apt-get install -y libsndfile1
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt -r requirements-dev.txt
+
+      - name: Run tests
+        run: pytest
+
+      - name: Verify the app imports and serves
+        run: |
+          python -c "from backend.main import app; print('app OK')"
+
+  # The ML extras are optional, so they get their own job: the `test` job
+  # above proves the backend works WITHOUT them, and this one proves the
+  # neural layer imports and stays inert until enabled.
+  ml-extras:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install libsndfile
+        run: sudo apt-get update && sudo apt-get install -y libsndfile1
+
+      - name: Install with CPU torch
+        run: |
+          python -m pip install --upgrade pip
+          pip install torch torchaudio --index-url https://download.pytorch.org/whl/cpu
+          pip install -r requirements.txt -r requirements-dev.txt
+          pip install torchcrepe transformers datasets
+
+      - name: Run tests with the ML layer present
+        run: pytest
+
+      - name: Assert ML stays off unless explicitly enabled
+        run: |
+          python -c "
+          from backend.utils.config import get_settings
+          s = get_settings()
+          assert not s.any_ml_enabled, 'ML must default to off'
+          assert s.warmup_models == [], 'nothing should warm up by default'
+          print('ML correctly inert by default')
+          "
+
+      - name: Verify the dataset manager runs
+        run: |
+          python scripts/datasets.py list
+          python scripts/datasets.py check
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build the image
+        run: docker build -t speaktwin:ci .

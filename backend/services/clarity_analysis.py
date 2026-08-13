@@ -1,46 +1,70 @@
 """
-SpeakTwin - Clarity Analysis Service
-============================================
-Computes language clarity metrics such as Lexical Diversity
-to determine how rich and articulate the transcription is.
+SpeakTwin - Clarity Analysis
+=============================
+Scores how varied and articulate a transcript is.
+
+Plain type-token ratio (unique / total) is strongly length-dependent: a
+five-word chunk almost always scores 1.0 while a hundred-word one rarely
+clears 0.6, so a per-chunk score and a whole-session score are not
+comparable on the same axis. The score is therefore built on MATTR
+(moving-average TTR): the average TTR across a sliding fixed-width window,
+which is stable as the text grows. Texts shorter than one window fall back
+to plain TTR. Raw TTR is still reported for display.
 """
-import typing
-from backend.utils.helpers import get_logger # type: ignore
+
+from __future__ import annotations
+
+from typing import Any, Dict, List
+
+from backend.utils import text as tk  # type: ignore
+from backend.utils.helpers import get_logger  # type: ignore
 
 logger = get_logger(__name__)
 
-def analyze_clarity(text: str, filler_rate: float) -> typing.Dict[str, typing.Any]:
+MATTR_WINDOW = 25         # words per sliding window
+DIVERSITY_TARGET = 0.75   # MATTR at or above this scores full marks
+FILLER_PENALTY_WEIGHT = 300.0
+
+
+def moving_average_ttr(words: List[str], window: int = MATTR_WINDOW) -> float:
     """
-    Calculate the Clarity Score of the transcription based on
-    lexical diversity and penalty from fillers.
+    Average type-token ratio across every sliding window of `window` words.
+
+    Falls back to plain TTR when the text is shorter than one window.
     """
+    total = len(words)
+    if total == 0:
+        return 0.0
+    if total <= window:
+        return len(set(words)) / total
+
+    ratios = [
+        len(set(words[i:i + window])) / window
+        for i in range(total - window + 1)
+    ]
+    return sum(ratios) / len(ratios)
+
+
+def analyze_clarity(text: str, filler_rate: float) -> Dict[str, Any]:
+    """Calculate a 0-100 clarity score from lexical variety minus fillers."""
+    empty = {"lexical_diversity": 0.0, "mattr": 0.0, "clarity_score": 0}
     if not text or not text.strip():
-        return {"lexical_diversity": 0.0, "clarity_score": 0}
+        return empty
 
-    normalised = text.lower().strip()
-    
-    # Strip common punctuation for accurate word counting
-    import re
-    cleaned_text = re.sub(r'[^\w\s]', '', normalised)
-    words = cleaned_text.split()
-    
+    words = tk.words(text)
     total_words = len(words)
-    
     if total_words == 0:
-        return {"lexical_diversity": 0.0, "clarity_score": 0}
+        return empty
 
-    unique_words = len(set(words))
-    lexical_diversity = round(float(unique_words) / float(total_words), 2) # type: ignore
-    
-    # Generate a clarity score (0-100) based on diversity and fillers
-    # Base clarity from lexical diversity (typically ~0.4 to 0.8 in natural speech depending on length)
-    # We normalize it so 0.75+ is 100 for short snippets
-    normalized_diversity = min(1.0, float(lexical_diversity) / 0.75) * 100.0
-    
-    clarity_score = normalized_diversity - (float(filler_rate) * 300.0)
-    clarity_score = max(0.0, min(100.0, clarity_score))
-    
+    lexical_diversity = round(len(set(words)) / total_words, 2)
+    mattr = moving_average_ttr(words)
+
+    normalised = min(1.0, mattr / DIVERSITY_TARGET) * 100.0
+    score = normalised - max(0.0, float(filler_rate)) * FILLER_PENALTY_WEIGHT
+    score = max(0.0, min(100.0, score))
+
     return {
         "lexical_diversity": lexical_diversity,
-        "clarity_score": int(round(clarity_score))
+        "mattr": round(mattr, 3),
+        "clarity_score": int(round(score)),
     }

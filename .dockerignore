@@ -1,0 +1,40 @@
+.git/
+.github/
+.gitignore
+.dockerignore
+Dockerfile
+Dockerfile.ml
+
+# Datasets and trained models - never copy these into an image
+data/
+models/
+.models/
+docs/
+
+# Local environments
+venv/
+env/
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Secrets - never bake these into an image
+.env
+.env.local
+
+# Not needed at runtime
+tests/
+requirements-dev.txt
+requirements-legacy.txt
+README.md
+static/
+server.py
+audio_engine.py
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+*.log

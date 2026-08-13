@@ -1,18 +1,22 @@
 """
 SpeakTwin - Feedback Engine
-==============================
-Generates human-readable, real-time feedback messages based on
-acoustic analysis and linguistic metrics.
+============================
+Generates human-readable, real-time coaching messages from the acoustic
+and linguistic metrics.
 
-Uses threshold-based rules with an extensible architecture that
-can later incorporate ML-based classification.
+Threshold-based rules with an extensible shape that can later incorporate
+ML-based classification.
 """
 
-from backend.utils.helpers import ( # type: ignore
+from __future__ import annotations
+
+from typing import Any, Dict, List
+
+from backend.utils.helpers import (  # type: ignore
     get_logger,
-    ENERGY_SILENCE_THRESHOLD,
-    ENERGY_LOW_THRESHOLD,
-    ENERGY_HIGH_THRESHOLD,
+    SILENCE_DBFS,
+    ENERGY_LOW_DBFS,
+    ENERGY_HIGH_DBFS,
     PITCH_LOW_THRESHOLD,
     PITCH_HIGH_THRESHOLD,
     PITCH_VARIATION_LOW,
@@ -22,55 +26,63 @@ from backend.utils.helpers import ( # type: ignore
     WPM_OPTIMAL_LOW,
     WPM_OPTIMAL_HIGH,
     FILLER_RATE_HIGH,
+    PAUSE_RATIO_HIGH,
+    PAUSE_RATIO_NATURAL,
+    rms_to_dbfs,
 )
 
 logger = get_logger(__name__)
 
 
 def generate_feedback(
-    energy: float,
     mean_pitch: float,
     pitch_std: float,
     wpm: float,
     filler_rate: float,
     pause_ratio: float,
-) -> dict:
+    energy_db: float | None = None,
+    energy: float | None = None,
+) -> Dict[str, Any]:
     """
     Produce a list of feedback messages and an overall status.
 
     Parameters
     ----------
-    energy       : float – RMS energy
-    mean_pitch   : float – average pitch in Hz
-    pitch_std    : float – pitch standard deviation
-    wpm          : float – words per minute
-    filler_rate  : float – fillers per word
-    pause_ratio  : float – fraction of silent frames
+    mean_pitch   : average pitch in Hz (0 when nothing voiced was found)
+    pitch_std    : pitch standard deviation in Hz
+    wpm          : words per minute
+    filler_rate  : fillers per word
+    pause_ratio  : fraction of silent frames
+    energy_db    : loudness in dBFS (preferred)
+    energy       : linear RMS fallback, converted when energy_db is omitted
 
     Returns
     -------
     dict with keys:
-        messages : list[dict]  – each has 'text', 'type' (info/warning/success)
-        status   : str         – overall status label
+        messages : list[dict] - each has 'text', 'type', 'category'
+        status   : str        - overall status label
     """
-    messages: list[dict] = []
+    if energy_db is None:
+        energy_db = rms_to_dbfs(energy if energy is not None else 0.0)
+
+    messages: List[Dict[str, str]] = []
 
     # ------------------------------------------------------------------
-    # 1. Energy / Volume Feedback
+    # 1. Loudness
     # ------------------------------------------------------------------
-    if energy < ENERGY_SILENCE_THRESHOLD:
+    if energy_db < SILENCE_DBFS:
         messages.append({
             "text": "Silence detected. Speak louder!",
             "type": "info",
             "category": "energy",
         })
-    elif energy < ENERGY_LOW_THRESHOLD:
+    elif energy_db < ENERGY_LOW_DBFS:
         messages.append({
             "text": "Volume low. Project more!",
             "type": "warning",
             "category": "energy",
         })
-    elif energy > ENERGY_HIGH_THRESHOLD:
+    elif energy_db > ENERGY_HIGH_DBFS:
         messages.append({
             "text": "Volume high! Lower slightly.",
             "type": "warning",
@@ -84,9 +96,9 @@ def generate_feedback(
         })
 
     # ------------------------------------------------------------------
-    # 2. Pitch Feedback
+    # 2. Pitch
     # ------------------------------------------------------------------
-    if mean_pitch > 0:  # only if pitch was detected
+    if mean_pitch > 0:  # only when something voiced was actually detected
         if mean_pitch < PITCH_LOW_THRESHOLD:
             messages.append({
                 "text": "Pitch low. Sounds monotone.",
@@ -106,7 +118,6 @@ def generate_feedback(
                 "category": "pitch",
             })
 
-        # Pitch variation
         if pitch_std < PITCH_VARIATION_LOW:
             messages.append({
                 "text": "Add variety! Tone is monotone.",
@@ -121,7 +132,7 @@ def generate_feedback(
             })
 
     # ------------------------------------------------------------------
-    # 3. Speaking Speed (WPM) Feedback
+    # 3. Speaking speed
     # ------------------------------------------------------------------
     if wpm > 0:
         if wpm < WPM_TOO_SLOW:
@@ -150,7 +161,7 @@ def generate_feedback(
             })
 
     # ------------------------------------------------------------------
-    # 4. Filler Words Feedback
+    # 4. Filler words
     # ------------------------------------------------------------------
     if filler_rate > FILLER_RATE_HIGH:
         messages.append({
@@ -172,15 +183,15 @@ def generate_feedback(
         })
 
     # ------------------------------------------------------------------
-    # 5. Pause / Silence Feedback
+    # 5. Pauses
     # ------------------------------------------------------------------
-    if pause_ratio > 0.6:
+    if pause_ratio > PAUSE_RATIO_HIGH:
         messages.append({
             "text": "Long pauses detected. Keep your speech flowing.",
             "type": "warning",
             "category": "pauses",
         })
-    elif pause_ratio > 0.35:
+    elif pause_ratio > PAUSE_RATIO_NATURAL:
         messages.append({
             "text": "Natural pacing with good pauses.",
             "type": "success",
@@ -188,12 +199,12 @@ def generate_feedback(
         })
 
     # ------------------------------------------------------------------
-    # Overall Status
+    # Overall status
     # ------------------------------------------------------------------
     warning_count = sum(1 for m in messages if m["type"] == "warning")
     success_count = sum(1 for m in messages if m["type"] == "success")
 
-    if energy < ENERGY_SILENCE_THRESHOLD:
+    if energy_db < SILENCE_DBFS:
         status = "silent"
     elif warning_count == 0 and success_count > 0:
         status = "excellent"
@@ -204,7 +215,4 @@ def generate_feedback(
     else:
         status = "poor"
 
-    return {
-        "messages": messages,
-        "status": status,
-    }
+    return {"messages": messages, "status": status}

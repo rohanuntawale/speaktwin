@@ -1,0 +1,52 @@
+# ============================================================
+# SpeakTwin - Deep Learning extras
+#   pip install -r requirements.txt -r requirements-ml.txt
+#
+# Everything here is OPTIONAL. The backend runs identically without
+# it; each ML_*_ENABLED flag simply stays off and the DSP pipeline
+# handles that metric instead.
+#
+# For CPU-only (much smaller than the default CUDA build):
+#   pip install torch torchaudio --index-url https://download.pytorch.org/whl/cpu
+# ============================================================
+
+-r requirements.txt
+
+# --- Core (needed by everything below) ----------------------
+torch>=2.2.0
+torchaudio>=2.2.0
+transformers>=4.40.0
+huggingface_hub>=0.23.0
+
+# --- Neural pitch tracking (CREPE) --------------------------
+# Pulls in librosa as a transitive dependency.
+torchcrepe>=0.0.23
+
+# --- Voice activity detection -------------------------------
+# Silero VAD loads via torch.hub from GitHub; no package needed.
+# The ONNX runtime path is faster on CPU if you want it:
+# onnxruntime>=1.17.0
+
+# --- Datasets & training ------------------------------------
+datasets>=2.19.0
+accelerate>=0.30.0
+evaluate>=0.4.0
+scikit-learn>=1.4.0
+
+# --- Prosody features (openSMILE eGeMAPS) -------------------
+opensmile>=2.5.0
+
+# --- Speaker embeddings -------------------------------------
+speechbrain>=1.0.0
+
+# --- Speaker diarization ------------------------------------
+# Gated on the Hub: accept the terms at
+# https://hf.co/pyannote/speaker-diarization-3.1 and set HF_TOKEN.
+pyannote.audio>=3.1.0
+
+# --- Word-level timestamps ----------------------------------
+# Pick one. whisperx is more accurate but heavier; it also pins
+# specific torch versions, so install it in its own environment if
+# it conflicts.
+whisper-timestamped>=1.15.0
+# whisperx>=3.1.0

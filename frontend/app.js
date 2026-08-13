@@ -1,487 +1,559 @@
 /**
  * ============================================================
- *  SpeakTwin – AI Communication Mirror
- *  Frontend Application Logic (Vanilla JS)
+ *  SpeakTwin — application logic
  * ============================================================
+ *  Captures microphone audio in the browser, ships 2.5 s WAV
+ *  chunks to the backend, and renders what comes back.
  *
- *  Handles:
- *    • Start / Stop microphone via API
- *    • Polling /api/analyze for real-time results
- *    • Non-blocking UI updates with async fetch
- *    • Animated meter bars, confidence ring, feedback list
- *    • Transcript display with filler highlighting
+ *  Audio is tapped twice from one stream: an AnalyserNode feeds
+ *  the voiceprint at frame rate, while a ScriptProcessor
+ *  accumulates raw samples for the chunk uploads.
  */
 
-// ---------------------------------------------------------------------------
-// Configuration
-// ---------------------------------------------------------------------------
-const API_BASE = "http://localhost:8002";    // Explicitly point to backend port 8002
-const CHUNK_DURATION_MS = 2500;      // Audio snippet duration in ms
-const POLL_INTERVAL_MS = 2800;      // Slightly under chunk duration for continuity
-const METER_BAR_COUNT = 20;         // Number of bars in each meter
+// ── Configuration ────────────────────────────────────────────
+// Same-origin: the backend serves this page, so hard-coding a
+// port only creates a mismatch to keep in sync.
+const API_BASE = window.SPEAKTWIN_API_BASE || "";
+const CHUNK_MS = 2500;
+const TARGET_RATE = 16000;
 
-// ---------------------------------------------------------------------------
-// DOM References
-// ---------------------------------------------------------------------------
+// ── Elements ─────────────────────────────────────────────────
 const $ = (id) => document.getElementById(id);
 
-const DOM = {
-    micBtn:             $("mic-btn"),
-    micIconSvg:         $("mic-icon-svg"),
-    controlLabel:       $("control-label"),
-    logoPulse:          $("logo-pulse"),
-    statusBadge:        $("status-badge"),
-    statusDot:          $("status-dot"),
-    statusText:         $("status-text"),
+const el = {
+  mic: $("mic"),
+  micGlyph: $("mic-glyph"),
+  prompt: $("prompt"),
+  stateText: $("state-text"),
+  state: $("state"),
 
-    // Meters
-    energyBars:         $("energy-bars"),
-    pitchBars:          $("pitch-bars"),
-    energyValue:        $("energy-value"),
-    pitchValue:         $("pitch-value"),
+  faderEnergy: $("fader-energy"),
+  faderPitch: $("fader-pitch"),
+  readEnergy: $("read-energy"),
+  readPitch: $("read-pitch"),
 
-    // Stats
-    wpmValue:           $("wpm-value"),
-    fillerValue:        $("filler-value"),
-    pauseValue:         $("pause-value"),
-    clarityValue:       $("clarity-value"),
+  scoreNum: $("score-num"),
+  bdWpm: $("bd-wpm"),
+  bdPitch: $("bd-pitch"),
+  bdEnergy: $("bd-energy"),
+  bdFiller: $("bd-filler"),
 
-    // Keywords
-    keywordPool:        $("keyword-pool"),
-    keywordPlaceholder: $("keyword-placeholder"),
+  insight: $("insight"),
+  notes: $("notes"),
 
-    // Confidence
-    scoreRingFill:      $("score-ring-fill"),
-    scoreValue:         $("score-value"),
-    bdWpm:              $("bd-wpm"),
-    bdPitch:            $("bd-pitch"),
-    bdEnergy:           $("bd-energy"),
-    bdFiller:           $("bd-filler"),
+  valWpm: $("val-wpm"),
+  valFiller: $("val-filler"),
+  valClarity: $("val-clarity"),
+  valPause: $("val-pause"),
 
-    // Feedback
-    liveDot:            $("live-dot"),
-    feedbackPrimary:    $("feedback-primary"),
-    feedbackList:       $("feedback-list"),
+  transcript: $("transcript"),
+  transcriptEmpty: $("transcript-empty"),
+  transcriptScroll: $("transcript-scroll"),
 
-    // Transcript
-    transcriptToggle:   $("transcript-toggle"),
-    transcriptBody:     $("transcript-body"),
-    transcriptPlaceholder: $("transcript-placeholder"),
-    transcriptText:     $("transcript-text"),
+  fillers: $("fillers"),
+  keywords: $("keywords"),
 
-    // Filler details
-    fillerDetails:      $("filler-details"),
+  ai: $("ai"),
+  aiRows: $("ai-rows"),
+  footEngine: $("foot-engine"),
 };
 
+// ── State ────────────────────────────────────────────────────
+let recording = false;
+let sessionId = null;
+let stream = null;
+let audioCtx = null;
+let source = null;
+let processor = null;
+let analyser = null;
+let voiceprint = null;
 
-// ---------------------------------------------------------------------------
-// State
-// ---------------------------------------------------------------------------
-let isRecording = false;
-let mediaRecorder = null;
-let audioChunks = [];
-let recordingInterval = null;
-let transcriptHistory = [];   // All transcript segments
+let totals = { fillers: {}, keywords: {} };
 
-// App cumulative state
-let appState = {
-    totalFillers: 0,
-    fillerDetails: {},
-    totalKeywords: 0,
-    keywordDetails: {}
-};
+// ── Utilities ────────────────────────────────────────────────
+function escapeHtml(text) {
+  const d = document.createElement("div");
+  d.textContent = text == null ? "" : String(text);
+  return d.innerHTML;
+}
 
-// ---------------------------------------------------------------------------
-// Main Controls
-// ---------------------------------------------------------------------------
-DOM.micBtn.addEventListener("click", () => {
-    if (!isRecording) {
-        startClientRecording();
-    } else {
-        stopClientRecording();
-    }
+function escapeRegex(text) {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/** Count toward a number instead of snapping to it. */
+function countTo(node, value, suffix = "") {
+  const from = parseFloat(node.dataset.v || "0");
+  const to = Number(value) || 0;
+  if (from === to) return;
+  node.dataset.v = String(to);
+
+  const start = performance.now();
+  const dur = 450;
+
+  const step = (now) => {
+    const t = Math.min(1, (now - start) / dur);
+    const eased = 1 - Math.pow(1 - t, 3);
+    const current = Math.round(from + (to - from) * eased);
+    node.innerHTML = current + suffix;
+    if (t < 1) requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
+}
+
+function setStatus(text, tone) {
+  if (el.stateText) el.stateText.textContent = text;
+  if (el.state) el.state.classList.toggle("error", tone === "error");
+}
+
+// ── Recording ────────────────────────────────────────────────
+el.mic.addEventListener("click", () => {
+  recording ? stopListening() : startListening();
 });
 
-function setRecordingState(recording) {
-    isRecording = recording;
-    
-    // Toggle mic button class
-    DOM.micBtn.classList.toggle("recording", recording);
-    DOM.controlLabel.textContent = recording ? "Tap to stop analysis" : "Tap to start analysis";
-    
-    // Toggle system status indicator
-    if (DOM.statusBadge) DOM.statusBadge.classList.toggle("recording", recording);
-    if (DOM.statusDot) DOM.statusDot.classList.toggle("recording", recording);
-    if (DOM.statusText) DOM.statusText.textContent = recording ? "Listening" : "Idle";
-    
-    // Aesthetic animations
-    if (DOM.logoPulse) DOM.logoPulse.classList.toggle("recording", recording);
-    if (DOM.liveDot) DOM.liveDot.classList.toggle("active", recording);
+function setLive(live) {
+  recording = live;
+  document.body.classList.toggle("live", live);
+  el.mic.setAttribute("aria-label", live ? "Stop listening" : "Start listening");
+  el.prompt.textContent = live ? "Listening — press to stop" : "Press to start listening";
+  setStatus(live ? "Listening" : "Idle");
 
-    // Swap mic icon to stop square
-    if (recording) {
-        DOM.micIconSvg.innerHTML = `<rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor" stroke="none"/>`;
-    } else {
-        DOM.micIconSvg.innerHTML = `<path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/>`;
-        setTimeout(() => updatePrimaryFeedback("Session complete. Click mic to analyze another snippet.", "info"), 1000);
-    }
+  el.micGlyph.innerHTML = live
+    ? `<svg viewBox="0 0 24 24" fill="currentColor"><rect x="7" y="7" width="10" height="10" rx="2.5"/></svg>`
+    : `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"
+         stroke-linecap="round" stroke-linejoin="round">
+         <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/>
+         <path d="M19 11v1a7 7 0 0 1-14 0v-1"/>
+         <line x1="12" y1="19" x2="12" y2="22"/>
+       </svg>`;
 }
 
+async function startListening() {
+  try {
+    setStatus("Requesting microphone");
+    stream = await navigator.mediaDevices.getUserMedia({ audio: true });
 
-// ---------------------------------------------------------------------------
-// Audio Pipeline (Vanilla JS Web Audio -> WAV -> Backend)
-// ---------------------------------------------------------------------------
+    resetSession();
+    sessionId = await apiCreateSession();
 
-/**
- * Creates a valid WAV file blob from Float32Array PCM data
- */
-function encodeWav(samples, sampleRate) {
-    const buffer = new ArrayBuffer(44 + samples.length * 2);
-    const view = new DataView(buffer);
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)({
+      sampleRate: TARGET_RATE,
+    });
+    source = audioCtx.createMediaStreamSource(stream);
 
-    const writeString = (view, offset, string) => {
-        for (let i = 0; i < string.length; i++) {
-            view.setUint8(offset + i, string.charCodeAt(i));
-        }
+    // Fast clock: drives the voiceprint at frame rate.
+    analyser = audioCtx.createAnalyser();
+    analyser.fftSize = 1024;
+    analyser.smoothingTimeConstant = 0.72;
+    source.connect(analyser);
+    voiceprint.listen(analyser);
+
+    // Slow clock: accumulate raw samples for chunk uploads.
+    processor = audioCtx.createScriptProcessor(4096, 1, 1);
+
+    // The browser may ignore the sample-rate hint, so send what we
+    // actually got — the backend resamples rather than assuming.
+    const rate = audioCtx.sampleRate;
+    const needed = Math.round(rate * (CHUNK_MS / 1000));
+    let buffer = [];
+
+    processor.onaudioprocess = async (e) => {
+      if (!recording) return;
+      const pcm = e.inputBuffer.getChannelData(0);
+      for (let i = 0; i < pcm.length; i++) buffer.push(pcm[i]);
+
+      if (buffer.length >= needed) {
+        const slice = new Float32Array(buffer.slice(0, needed));
+        buffer = buffer.slice(needed);
+        const result = await apiAnalyze(encodeWav(slice, rate));
+        if (result) render(result);
+      }
     };
 
-    writeString(view, 0, 'RIFF');
-    view.setUint32(4, 36 + samples.length * 2, true);
-    writeString(view, 8, 'WAVE');
-    writeString(view, 12, 'fmt ');
-    view.setUint32(16, 16, true);
-    view.setUint16(20, 1, true); // PCM format
-    view.setUint16(22, 1, true); // 1 channel
-    view.setUint32(24, sampleRate, true);
-    view.setUint32(28, sampleRate * 2, true);
-    view.setUint16(32, 2, true);
-    view.setUint16(34, 16, true);
-    writeString(view, 36, 'data');
-    view.setUint32(40, samples.length * 2, true);
+    source.connect(processor);
+    processor.connect(audioCtx.destination);
 
-    // Write PCM samples
-    let offset = 44;
-    for (let i = 0; i < samples.length; i++, offset += 2) {
-        let s = Math.max(-1, Math.min(1, samples[i]));
-        view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
-    }
-
-    return new Blob([view], { type: 'audio/wav' });
+    setLive(true);
+  } catch (err) {
+    console.error("[SpeakTwin]", err);
+    setStatus("Microphone blocked", "error");
+    say("Microphone access is blocked. Allow it in your browser's site settings, then press again.", "poor");
+  }
 }
 
+async function stopListening() {
+  setLive(false);
+  if (voiceprint) voiceprint.stop();
 
-async function startClientRecording() {
-    try {
-        console.log("[SpeakTwin] Requesting microphone access...");
-        
-        // Reset state on new session
-        appState = { totalFillers: 0, fillerDetails: {}, totalKeywords: 0, keywordDetails: {} };
-        if (DOM.fillerValue) DOM.fillerValue.textContent = "0";
-        if (DOM.keywordPool) DOM.keywordPool.innerHTML = '<p class="transcript-placeholder" id="keyword-placeholder">Speak target words to highlight...</p>';
-        if (DOM.fillerDetails) DOM.fillerDetails.innerHTML = '<p class="transcript-placeholder">No fillers detected yet</p>';
-        if (DOM.transcriptText) DOM.transcriptText.innerHTML = "";
-        if (DOM.transcriptPlaceholder) DOM.transcriptPlaceholder.style.display = "block";
-        
-        stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        console.log("[SpeakTwin] Microphone access granted.");
-        
-        audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
-        source = audioCtx.createMediaStreamSource(stream);
+  if (stream) stream.getTracks().forEach((t) => t.stop());
+  if (processor) processor.disconnect();
+  if (source) source.disconnect();
+  if (analyser) analyser.disconnect();
+  if (audioCtx && audioCtx.state !== "closed") audioCtx.close();
+  stream = audioCtx = source = processor = analyser = null;
 
-        processor = audioCtx.createScriptProcessor(4096, 1, 1);
-        
-        let sampleAccumulator = [];
-        const requiredSamples = 16000 * (CHUNK_DURATION_MS / 1000); // e.g. 40000 for 2.5s
+  setFader(el.faderEnergy, 0);
+  setFader(el.faderPitch, 0);
 
-        processor.onaudioprocess = async (e) => {
-            if (!isRecording) return;
-            
-            const pcmData = e.inputBuffer.getChannelData(0);
-            sampleAccumulator.push(...pcmData);
-
-            if (sampleAccumulator.length >= requiredSamples) {
-                // Take a snapshot
-                const samplesToSend = new Float32Array(sampleAccumulator.slice(0, requiredSamples));
-                // Keep the rest (overlap or overflow)
-                sampleAccumulator = sampleAccumulator.slice(requiredSamples);
-                
-                console.log(`[SpeakTwin] Sending ${samplesToSend.length} samples as WAV...`);
-                const blob = encodeWav(samplesToSend, 16000);
-                const result = await apiAnalyze(blob);
-                console.log("[SpeakTwin] Analysis result:", result);
-                if (result) handleAnalysisResult(result);
-            }
-        };
-
-        source.connect(processor);
-        processor.connect(audioCtx.destination);
-
-        setRecordingState(true);
-        isRecording = true;
-
-        // Cleanup on stop
-        window._stopRec = () => {
-            stream.getTracks().forEach(t => t.stop());
-            processor.disconnect();
-            source.disconnect();
-            audioCtx.close();
-        };
-
-    } catch (err) {
-        console.error("[error] Microphone access denied:", err);
-        updatePrimaryFeedback("Microphone access denied. Please check site permissions.", "poor");
-    }
+  if (sessionId) {
+    const report = await apiEndSession(sessionId);
+    sessionId = null;
+    if (report) summarise(report);
+  }
 }
 
-/**
- * Stops the client-side recording.
- */
-function stopClientRecording() {
-    isRecording = false;
-    if (window._stopRec) window._stopRec();
-    setRecordingState(false);
-    updateMeterBars(DOM.energyBars, 0);
-    updateMeterBars(DOM.pitchBars, 0);
-    setServerStatus("Idle", "inactive");
-    
-    // Reset transient visual state optionally, or keep history.
-    // For now, let's keep the history visible until the next "Start" clears it.
+function resetSession() {
+  totals = { fillers: {}, keywords: {} };
+  el.transcript.innerHTML = "";
+  el.transcriptEmpty.style.display = "";
+  el.fillers.innerHTML = `<p class="empty">No fillers yet.</p>`;
+  el.keywords.innerHTML = `<p class="empty">Say a target word to collect it.</p>`;
+  el.notes.innerHTML = `<p class="empty">Listening…</p>`;
+  el.ai.hidden = true;
+  if (voiceprint) voiceprint.reset();
+  ["valWpm", "valFiller", "valClarity"].forEach((k) => {
+    el[k].dataset.v = "0";
+    el[k].textContent = "0";
+  });
+  el.valPause.dataset.v = "0";
+  el.valPause.innerHTML = `0<i>%</i>`;
+  el.scoreNum.textContent = "—";
+  document.querySelectorAll(".cell").forEach((c) => c.removeAttribute("data-tone"));
 }
 
-// ---------------------------------------------------------------------------
-// API Calls
-// ---------------------------------------------------------------------------
+/** Float32 PCM → 16-bit WAV. */
+function encodeWav(samples, rate) {
+  const buf = new ArrayBuffer(44 + samples.length * 2);
+  const view = new DataView(buf);
+  const str = (off, s) => {
+    for (let i = 0; i < s.length; i++) view.setUint8(off + i, s.charCodeAt(i));
+  };
 
-/**
- * POST the audio blob to the backend for analysis.
- */
+  str(0, "RIFF");
+  view.setUint32(4, 36 + samples.length * 2, true);
+  str(8, "WAVE");
+  str(12, "fmt ");
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true);
+  view.setUint16(22, 1, true);
+  view.setUint32(24, rate, true);
+  view.setUint32(28, rate * 2, true);
+  view.setUint16(32, 2, true);
+  view.setUint16(34, 16, true);
+  str(36, "data");
+  view.setUint32(40, samples.length * 2, true);
+
+  let off = 44;
+  for (let i = 0; i < samples.length; i++, off += 2) {
+    const s = Math.max(-1, Math.min(1, samples[i]));
+    view.setInt16(off, s < 0 ? s * 0x8000 : s * 0x7fff, true);
+  }
+  return new Blob([view], { type: "audio/wav" });
+}
+
+// ── API ──────────────────────────────────────────────────────
+async function apiCreateSession() {
+  try {
+    const res = await fetch(`${API_BASE}/api/session`, { method: "POST" });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return (await res.json()).session_id;
+  } catch (err) {
+    console.warn("[SpeakTwin] No session:", err);
+    return null;   // analysis still works, just without smoothing
+  }
+}
+
+async function apiEndSession(id) {
+  try {
+    const res = await fetch(`${API_BASE}/api/session/${id}`, { method: "DELETE" });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return await res.json();
+  } catch (err) {
+    console.warn("[SpeakTwin] Session not closed:", err);
+    return null;
+  }
+}
+
 async function apiAnalyze(blob) {
-    try {
-        setServerStatus("Analyzing...", "active");
-        const formData = new FormData();
-        formData.append("audio_file", blob, "chunk.wav");
+  try {
+    const form = new FormData();
+    form.append("audio_file", blob, "chunk.wav");
+    if (sessionId) form.append("session_id", sessionId);
 
-        const res = await fetch(`${API_BASE}/api/analyze`, {
-            method: "POST",
-            body: formData,
-        });
+    const res = await fetch(`${API_BASE}/api/analyze`, { method: "POST", body: form });
 
-        if (!res.ok) {
-            const errData = await res.json();
-            throw new Error(errData.message || "Server Error");
-        }
-        
-        setServerStatus("Server OK", "active");
-        return await res.json();
-    } catch (err) {
-        console.error("Analysis fetch error:", err);
-        setServerStatus("Connection Error", "error");
-        updatePrimaryFeedback(`Connection error: ${err.message}`, "poor");
-        return null;
+    if (!res.ok) {
+      let message = `Server error ${res.status}`;
+      try {
+        message = (await res.json()).message || message;
+      } catch (_) { /* non-JSON body */ }
+      throw new Error(message);
     }
+    if (recording) setStatus("Listening");
+    return await res.json();
+  } catch (err) {
+    console.error("[SpeakTwin]", err);
+    setStatus("Connection lost", "error");
+    say(err.message, "poor");
+    return null;
+  }
 }
 
-function setServerStatus(text, state) {
-    if (!DOM.statusText || !DOM.statusDot) return;
-    DOM.statusText.textContent = text;
-    DOM.statusDot.className = "status-dot";
-    if (state === "active") DOM.statusDot.classList.add("recording");
+// ── Rendering ────────────────────────────────────────────────
+function render(d) {
+  if (!d || d.status === "error") return;
+
+  // Instrument — the smoothed score trends instead of jumping
+  const score = d.confidence_smoothed ?? d.confidence_score ?? 0;
+  voiceprint.update({
+    score,
+    energyDb: d.energy_db,
+    tooLoud: d.energy_db > -12,
+  });
+  el.scoreNum.textContent = Math.round(score);
+  el.scoreNum.style.color = `rgb(${voiceprint.colour().join(",")})`;
+
+  // Live acoustic rails
+  setFader(el.faderEnergy, clamp01((d.energy_db + 60) / 48));
+  el.readEnergy.textContent = `${Math.round(d.energy_db)} dB`;
+
+  const pitchNorm = d.pitch > 0 ? clamp01((d.pitch - 60) / 300) : 0;
+  setFader(el.faderPitch, pitchNorm);
+  el.readPitch.textContent = d.pitch > 0 ? `${Math.round(d.pitch)} Hz` : "—";
+
+  // Breakdown
+  const bd = d.confidence_breakdown || {};
+  setBar(el.bdWpm, bd.wpm);
+  setBar(el.bdPitch, bd.pitch_variation);
+  setBar(el.bdEnergy, bd.energy);
+  setBar(el.bdFiller, bd.filler_usage);
+
+  // Readouts
+  countTo(el.valWpm, Math.round(d.wpm));
+  countTo(el.valClarity, Math.round(d.clarity || 0));
+  countTo(el.valPause, Math.round((d.pause_ratio || 0) * 100), "<i>%</i>");
+
+  tone(el.valWpm.closest(".cell"), wpmTone(d.wpm));
+  tone(el.valClarity.closest(".cell"), d.clarity >= 70 ? "good" : d.clarity >= 40 ? null : "warn");
+
+  // Headline
+  say(d.message, d.status);
+  notes(d.feedback);
+
+  // Transcript
+  if (d.transcript) appendTranscript(d);
+
+  // Totals: prefer the server session, fall back to local
+  if (d.session) {
+    totals.fillers = d.session.filler_details || {};
+    totals.keywords = d.session.keyword_details || {};
+  } else {
+    accumulate(totals.fillers, d.fillers && d.fillers.details);
+    accumulate(totals.keywords, d.keywords && d.keywords.found_keywords);
+  }
+  const fillerCount = Object.values(totals.fillers).reduce((a, b) => a + b, 0);
+  countTo(el.valFiller, fillerCount);
+  tone(el.valFiller.closest(".cell"), fillerCount > 6 ? "over" : fillerCount > 2 ? "warn" : null);
+
+  renderTags(el.fillers, totals.fillers, "fill", "No fillers yet.");
+  renderTags(el.keywords, totals.keywords, "key", "Say a target word to collect it.");
+
+  neural(d);
+
+  if (d.degraded && d.warnings?.includes("stt_unavailable")) {
+    setStatus("Transcription unavailable", "error");
+  }
 }
 
-// ---------------------------------------------------------------------------
-// UI Update Functions
-// ---------------------------------------------------------------------------
+const clamp01 = (v) => Math.max(0, Math.min(1, v || 0));
 
-/**
- * Central handler for analysis data.
- */
-function handleAnalysisResult(data) {
-    if (!data || data.status === "error") return;
-
-    // -- Update meters --
-    const energyNorm = Math.min(data.energy / 0.15, 1);
-    updateMeterBars(DOM.energyBars, energyNorm, 0.85);
-    DOM.energyValue.textContent = data.energy.toFixed(3);
-
-    const pitchNorm = data.pitch > 0 ? Math.min(data.pitch / 350, 1) : 0;
-    updateMeterBars(DOM.pitchBars, pitchNorm, 0.85);
-    DOM.pitchValue.textContent = data.pitch > 0 ? `${Math.round(data.pitch)}Hz` : "—";
-
-    // -- Update stats --
-    DOM.wpmValue.textContent = Math.round(data.wpm);
-    DOM.pauseValue.textContent =
-        data.pause_ratio !== undefined
-            ? `${Math.round(data.pause_ratio * 100)}%`
-            : "—";
-
-    if (DOM.clarityValue && data.clarity !== undefined) {
-        DOM.clarityValue.textContent = Math.round(data.clarity);
-    }
-
-    // -- Update Confidence Circle & Breakdown --
-    updateConfidenceScore(data.confidence_score || 0);
-    updateBreakdown(data.confidence_breakdown);
-
-    // -- Update primary insight --
-    updatePrimaryFeedback(data.message, data.status);
-
-    // -- Update transcript with highlighting --
-    if (data.transcript) {
-        let highlightedText = data.transcript;
-        
-        // Emphasize keywords (green)
-        if (data.keywords && data.keywords.keywords_list) {
-            data.keywords.keywords_list.forEach(kw => {
-                const regex = new RegExp(`\\b${kw}\\b`, 'gi');
-                highlightedText = highlightedText.replace(regex, `<span class="keyword-highlight">$&</span>`);
-            });
-        }
-        
-        // Emphasize fillers (red)
-        if (data.fillers && data.fillers.details) {
-            Object.keys(data.fillers.details).forEach(fw => {
-                const regex = new RegExp(`\\b${fw}\\b`, 'gi');
-                highlightedText = highlightedText.replace(regex, `<span class="filler-highlight">$&</span>`);
-            });
-        }
-        
-        appendTranscriptHTML(highlightedText);
-    }
-    
-    // Accumulate fillers
-    if (data.fillers && data.fillers.total_fillers > 0) {
-        appState.totalFillers += data.fillers.total_fillers;
-        if (DOM.fillerValue) DOM.fillerValue.textContent = appState.totalFillers;
-        
-        for (const [fw, count] of Object.entries(data.fillers.details)) {
-            appState.fillerDetails[fw] = (appState.fillerDetails[fw] || 0) + count;
-        }
-        updateFillerDetails(appState.fillerDetails);
-    }
-    
-    // Accumulate keywords
-    if (data.keywords && data.keywords.total_keywords > 0) {
-        appState.totalKeywords += data.keywords.total_keywords;
-        
-        for (const [kw, count] of Object.entries(data.keywords.found_keywords)) {
-            appState.keywordDetails[kw] = (appState.keywordDetails[kw] || 0) + count;
-        }
-        updateKeywordDetails(appState.keywordDetails);
-    }
+function setFader(fader, value) {
+  const fill = fader.querySelector(".fader-fill");
+  if (fill) fill.style.right = `${100 - clamp01(value) * 100}%`;
 }
 
-/**
- * Update the animated meter bars.
- */
-function updateMeterBars(container, level, highThreshold = 0.8) {
-    if (!container) return;
-    const bars = container.querySelectorAll("span");
-    const activeBars = Math.round(level * bars.length);
+function setBar(node, pct) {
+  if (node) node.style.width = `${Math.round(clamp01((pct || 0) / 100) * 100)}%`;
+}
 
-    bars.forEach((bar, i) => {
-        if (i < activeBars) {
-            bar.classList.add("active");
-            const h = 4 + (level * 76) * (0.5 + Math.random() * 0.5);
-            bar.style.height = `${Math.min(h, 80)}px`;
-            if (level > highThreshold) bar.classList.add("high");
-            else bar.classList.remove("high");
-        } else {
-            bar.classList.remove("active", "high");
-            bar.style.height = `${4 + Math.random() * 3}px`;
-        }
+function tone(cell, value) {
+  if (!cell) return;
+  value ? cell.setAttribute("data-tone", value) : cell.removeAttribute("data-tone");
+}
+
+function wpmTone(wpm) {
+  if (!wpm) return null;
+  if (wpm < 100 || wpm > 175) return "over";
+  if (wpm < 120 || wpm > 160) return "warn";
+  return "good";
+}
+
+/** Swap the headline with a blur transition rather than a hard cut. */
+function say(text, status) {
+  if (!text || el.insight.textContent === text) return;
+  el.insight.classList.add("swap");
+  setTimeout(() => {
+    el.insight.textContent = text;
+    el.insight.className = `insight ${status || ""}`;
+  }, 300);
+}
+
+function notes(messages) {
+  if (!Array.isArray(messages) || !messages.length) return;
+  const order = { warning: 0, info: 1, success: 2 };
+  el.notes.innerHTML = "";
+  [...messages]
+    .sort((a, b) => (order[a.type] ?? 3) - (order[b.type] ?? 3))
+    .forEach((m, i) => {
+      const row = document.createElement("div");
+      row.className = `note ${m.type || "info"}`;
+      row.style.animationDelay = `${i * 40}ms`;
+      row.innerHTML =
+        `<span class="note-tag">${escapeHtml(m.category || "")}</span>` +
+        `<span>${escapeHtml(m.text || "")}</span>`;
+      el.notes.appendChild(row);
     });
 }
 
-function updateConfidenceScore(score) {
-    if (!DOM.scoreRingFill || !DOM.scoreValue) return;
-    const circumference = 2 * Math.PI * 52;
-    const offset = circumference - (score / 100) * circumference;
-    DOM.scoreRingFill.style.strokeDashoffset = offset;
+function appendTranscript(d) {
+  // Escape first — anything the STT engine returns is untrusted.
+  let html = escapeHtml(d.transcript);
 
-    if (score >= 75) DOM.scoreRingFill.style.stroke = "var(--accent-green)";
-    else if (score >= 50) DOM.scoreRingFill.style.stroke = "var(--accent-cyan)";
-    else if (score >= 25) DOM.scoreRingFill.style.stroke = "var(--accent-yellow)";
-    else DOM.scoreRingFill.style.stroke = "var(--accent-orange)";
+  const wrap = (phrases, cls) => {
+    (phrases || []).forEach((p) => {
+      if (!p) return;
+      const re = new RegExp(`\\b${escapeRegex(escapeHtml(p))}\\b`, "gi");
+      html = html.replace(re, `<mark class="${cls}">$&</mark>`);
+    });
+  };
+  wrap(d.keywords && d.keywords.keywords_list, "key");
+  wrap(d.fillers && Object.keys(d.fillers.details || {}), "fill");
 
-    DOM.scoreValue.textContent = Math.round(score);
+  el.transcriptEmpty.style.display = "none";
+  const seg = document.createElement("div");
+  seg.innerHTML = html;
+  el.transcript.appendChild(seg);
+  el.transcriptScroll.scrollTo({
+    top: el.transcriptScroll.scrollHeight,
+    behavior: "smooth",
+  });
 }
 
-function updateBreakdown(breakdown) {
-    if (!breakdown) return;
-    const upd = (el, val) => { if (el) el.style.width = `${Math.round(val || 0)}%`; };
-    upd(DOM.bdWpm, breakdown.wpm);
-    upd(DOM.bdPitch, breakdown.pitch_variation);
-    upd(DOM.bdEnergy, breakdown.energy);
-    upd(DOM.bdFiller, breakdown.filler_usage);
+function accumulate(target, source) {
+  Object.entries(source || {}).forEach(([k, v]) => {
+    target[k] = (target[k] || 0) + v;
+  });
 }
 
-function updatePrimaryFeedback(message, type) {
-    if (!DOM.feedbackPrimary || !message) return;
-    
-    DOM.feedbackPrimary.style.opacity = 0;
-    DOM.feedbackPrimary.style.transform = "translateY(10px)";
-    
-    setTimeout(() => {
-        DOM.feedbackPrimary.textContent = message;
-        DOM.feedbackPrimary.className = `feedback-primary ${type}`;
-        DOM.feedbackPrimary.style.opacity = 1;
-        DOM.feedbackPrimary.style.transform = "translateY(0)";
-    }, 300);
+function renderTags(host, map, cls, emptyText) {
+  const entries = Object.entries(map || {}).sort((a, b) => b[1] - a[1]);
+  if (!entries.length) {
+    host.innerHTML = `<p class="empty">${emptyText}</p>`;
+    return;
+  }
+  host.innerHTML = "";
+  entries.forEach(([word, count], i) => {
+    const tag = document.createElement("span");
+    tag.className = `tag ${cls}`;
+    tag.style.animationDelay = `${i * 30}ms`;
+    tag.innerHTML = `${escapeHtml(word)} <b>${count}</b>`;
+    host.appendChild(tag);
+  });
 }
 
-function appendTranscriptHTML(htmlContent) {
-    if (!DOM.transcriptText || !htmlContent.trim()) return;
-    if (DOM.transcriptPlaceholder) DOM.transcriptPlaceholder.style.display = "none";
+/** Neural fields are null unless the models are enabled. */
+function neural(d) {
+  const rows = [];
 
-    const p = document.createElement("div");
-    p.className = "new-segment";
-    p.innerHTML = htmlContent;
-    DOM.transcriptText.appendChild(p);
-    
-    // Smooth scroll to bottom
-    setTimeout(() => {
-        DOM.transcriptBody.scrollTo({
-            top: DOM.transcriptBody.scrollHeight,
-            behavior: "smooth"
-        });
-    }, 50);
-}
+  if (d.engines) {
+    rows.push(
+      `<div class="ai-engines">${Object.entries(d.engines)
+        .map(([k, v]) => `${escapeHtml(k)} · ${escapeHtml(v)}`)
+        .join("   ")}</div>`
+    );
+  }
 
-function updateFillerDetails(details) {
-    if (!DOM.fillerDetails) return;
-    DOM.fillerDetails.innerHTML = "";
-    if (!details || Object.keys(details).length === 0) {
-        DOM.fillerDetails.innerHTML = '<p class="transcript-placeholder">No fillers detected yet</p>';
-        return;
+  if (d.emotion) {
+    rows.push(row("Tone", escapeHtml(d.emotion.label)));
+    rows.push(meter("Vocal tension", d.emotion.tension, d.emotion.tension > 0.5));
+  }
+  if (d.speech_ratio != null) rows.push(meter("Speech vs silence", d.speech_ratio));
+  if (d.pitch_confidence != null) rows.push(meter("Pitch certainty", d.pitch_confidence));
+
+  if (d.prosody) {
+    const parts = [];
+    if (d.prosody.jitter !== undefined) parts.push(`jitter ${d.prosody.jitter}`);
+    if (d.prosody.shimmer !== undefined) parts.push(`shimmer ${d.prosody.shimmer}`);
+    if (parts.length) rows.push(row("Voice quality", parts.join(" · ")));
+  }
+
+  if (d.disfluency) {
+    rows.push(row("Fillers heard / written",
+      `${d.disfluency.acoustic_total} / ${d.disfluency.text_total}`));
+  }
+
+  if (d.alignment) {
+    rows.push(row("Articulation", `${d.alignment.articulation_rate_wpm} wpm`));
+    if (d.alignment.pause_count) {
+      rows.push(row("Pauses placed", String(d.alignment.pause_count)));
     }
+  }
 
-    Object.entries(details)
-        .sort((a, b) => b[1] - a[1])
-        .forEach(([word, count]) => {
-            const span = document.createElement("span");
-            span.className = "filler-tag";
-            span.innerHTML = `${word} <span class="filler-tag-count">${count}</span>`;
-            DOM.fillerDetails.appendChild(span);
-        });
+  if (d.speaker_similarity != null) {
+    rows.push(meter("Same speaker", d.speaker_similarity, d.speaker_similarity < 0.6));
+  }
+
+  if (!rows.length) {
+    el.ai.hidden = true;
+    return;
+  }
+  el.ai.hidden = false;
+  el.aiRows.innerHTML = rows.join("");
 }
 
-function updateKeywordDetails(details) {
-    if (!DOM.keywordPool) return;
-    DOM.keywordPool.innerHTML = "";
-    
-    if (!details || Object.keys(details).length === 0) {
-        DOM.keywordPool.innerHTML = '<p class="transcript-placeholder" id="keyword-placeholder">Speak target words to highlight...</p>';
-        return;
-    }
+const row = (label, value) =>
+  `<div class="ai-row"><span>${label}</span><b>${value}</b></div>`;
 
-    Object.entries(details)
-        .sort((a, b) => b[1] - a[1]) // highest first
-        .forEach(([word, count]) => {
-            const span = document.createElement("span");
-            span.className = "keyword-pill";
-            span.innerHTML = `${word} <span class="keyword-pill-count">${count}</span>`;
-            DOM.keywordPool.appendChild(span);
-        });
+const meter = (label, value, hot) => {
+  const pct = Math.round(clamp01(value) * 100);
+  return `<div class="ai-row"><span>${label}</span><b>${pct}%</b>` +
+         `<span class="ai-bar"><i class="${hot ? "hot" : ""}" style="width:${pct}%"></i></span></div>`;
+};
+
+/** Closing summary in the headline slot. */
+function summarise(report) {
+  if (!report.analysed_chunks) {
+    say("Nothing to score — no speech was detected.", "info");
+    el.prompt.textContent = "Press to start listening";
+    return;
+  }
+  const bits = [];
+  if (report.avg_confidence != null) bits.push(`${report.avg_confidence} confidence`);
+  if (report.avg_wpm) bits.push(`${Math.round(report.avg_wpm)} wpm`);
+  bits.push(`${report.total_fillers} filler${report.total_fillers === 1 ? "" : "s"}`);
+  bits.push(`${report.total_words} words`);
+
+  say(bits.join("  ·  "), "info");
+  el.prompt.textContent = "Press to run it again";
+  if (report.avg_confidence != null) {
+    voiceprint.update({ score: report.avg_confidence });
+    el.scoreNum.textContent = report.avg_confidence;
+  }
 }
 
-// End of SpeakTwin Application Logic
+// ── Boot ─────────────────────────────────────────────────────
+voiceprint = new Voiceprint($("voiceprint"));
+setLive(false);
+
+// Tell the user which engine is actually running, rather than
+// claiming privacy the configuration may not provide.
+fetch(`${API_BASE}/api/status`)
+  .then((r) => (r.ok ? r.json() : null))
+  .then((s) => {
+    if (!s || !el.footEngine) return;
+    el.footEngine.textContent =
+      s.stt_engine === "local"
+        ? "Running locally — audio never leaves this machine"
+        : `Transcribing via ${s.stt_engine} — audio is sent to that provider`;
+  })
+  .catch(() => {});

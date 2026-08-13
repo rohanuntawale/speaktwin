@@ -1,15 +1,29 @@
 """
-SpeakTwin - Audio Capture Service
-===================================
+SpeakTwin - Audio Capture Service  (SERVER-SIDE, NOT USED IN DEPLOYMENT)
+========================================================================
 Manages microphone input using sounddevice with a streaming callback.
-Audio is captured in a non-blocking fashion and buffered for analysis.
-Uses a singleton pattern so only one capture session exists at a time.
+
+Capture moved to the browser: the frontend records via the Web Audio API
+and POSTs WAV chunks to /api/analyze, which is the only arrangement that
+works on a server with no microphone. This module is kept for local
+experiments and single-machine kiosk use.
+
+`sounddevice` is therefore an optional dependency (see
+requirements-legacy.txt). The import is guarded so the module stays
+importable without it, and only `start()` fails if it is genuinely absent.
 """
 
 import threading
-import numpy as np
-import sounddevice as sd
 from collections import deque
+
+import numpy as np
+
+try:  # optional - only needed for server-side capture
+    import sounddevice as sd  # type: ignore
+    SOUNDDEVICE_AVAILABLE = True
+except Exception:  # pragma: no cover - depends on the host audio stack
+    sd = None  # type: ignore
+    SOUNDDEVICE_AVAILABLE = False
 
 from backend.utils.helpers import (
     get_logger,
@@ -52,7 +66,7 @@ class AudioCapture:
 
         # Store the last N chunks for analysis (ring buffer)
         self._buffer: deque = deque(maxlen=5)
-        self._stream: sd.InputStream | None = None
+        self._stream = None
         self._recording = False
         self._accumulated = np.array([], dtype=np.float32)
         self._acc_lock = threading.Lock()
@@ -87,8 +101,13 @@ class AudioCapture:
     # ------------------------------------------------------------------
     def start(self) -> None:
         """Begin recording from the default microphone."""
+        if not SOUNDDEVICE_AVAILABLE:
+            raise RuntimeError(
+                "sounddevice is not installed. Server-side capture is optional; "
+                "install it with `pip install -r requirements-legacy.txt`."
+            )
         if self._recording:
-            logger.info("Already recording – skipping start()")
+            logger.info("Already recording - skipping start()")
             return
 
         self._buffer.clear()

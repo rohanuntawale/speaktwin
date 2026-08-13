@@ -1,27 +1,33 @@
 # ============================================================
-# SpeakTwin – AI Communication Mirror
-# Python Dependencies
+# SpeakTwin - AI Communication Mirror
+# Runtime dependencies
+#
+# Upper bounds are pinned to the next major version so a breaking
+# release cannot silently land in a fresh install or a rebuilt image.
 # ============================================================
 
 # Web Framework
-fastapi>=0.115.0
-uvicorn[standard]>=0.30.0
+fastapi>=0.115.0,<1.0.0
+uvicorn[standard]>=0.30.0,<1.0.0
+python-multipart>=0.0.10,<0.1.0
+pydantic>=2.7.0,<3.0.0
 
-# Audio Capture
-sounddevice>=0.4.0
-soundfile>=0.12.0
-
-# Audio Analysis
+# Audio decoding & analysis
 numpy>=1.26.0,<2.0.0
-scipy>=1.13.0
-librosa>=0.10.0
+scipy>=1.13.0,<2.0.0
+soundfile>=0.12.0,<1.0.0
 
 # Speech-to-Text (local inference)
-faster-whisper>=1.0.0
-ctranslate2>=4.0.0
+faster-whisper>=1.0.0,<2.0.0
+ctranslate2>=4.0.0,<5.0.0
+
+# Cloud STT / LLM clients (optional at runtime, imported lazily)
+groq>=0.9.0,<1.0.0
+openai>=1.30.0,<2.0.0
 
 # Utilities
-python-multipart>=0.0.10
-python-dotenv>=1.0.1
-groq>=0.9.0
-openai>=1.30.0
+python-dotenv>=1.0.1,<2.0.0
+
+# NOTE: librosa and sounddevice are NOT required by the server. Audio is
+# captured in the browser and decoded with soundfile/scipy. See
+# requirements-legacy.txt if you want to run the standalone prototypes.

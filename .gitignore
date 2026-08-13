@@ -27,9 +27,25 @@ desktop.ini
 *.bin
 *.ct2
 
+# Datasets and trained models - far too large for git
+data/
+models/
+.models/
+*.ckpt
+*.safetensors
+*.pt
+*.pth
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+
 # Logs
 *.log
 
 # Environment
 .env
 .env.local
+# .env.example is committed on purpose - it documents the config surface.
+!.env.example

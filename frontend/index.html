@@ -1,238 +1,171 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="SpeakTwin – AI Communication Mirror. Get real-time feedback on your speaking skills with AI-powered voice analysis.">
-    <title>SpeakTwin – AI Communication Mirror</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="style.css?v=3">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="SpeakTwin — hear yourself the way a room hears you. Real-time speech analysis and coaching.">
+<meta name="theme-color" content="#06070e">
+<title>SpeakTwin — Hear yourself the way a room hears you</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wdth,wght@12..96,75..100,400;12..96,75..100,600;12..96,75..100,800&family=Instrument+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css?v=5">
 </head>
 <body>
 
-    <!-- Animated background -->
-    <div class="bg-aurora">
-        <div class="aurora-orb aurora-orb-1"></div>
-        <div class="aurora-orb aurora-orb-2"></div>
-        <div class="aurora-orb aurora-orb-3"></div>
+<!-- Ambient room light — two slow drifting pools, cold until you speak -->
+<div class="room" aria-hidden="true">
+  <span class="pool pool-a"></span>
+  <span class="pool pool-b"></span>
+  <span class="grain"></span>
+</div>
+
+<header class="masthead">
+  <div class="mark">
+    <span class="mark-dot" id="mark-dot"></span>
+    <span class="mark-name">SpeakTwin</span>
+  </div>
+  <div class="state" id="state">
+    <span class="state-led" id="state-led"></span>
+    <span class="state-text" id="state-text">Idle</span>
+  </div>
+</header>
+
+<main>
+
+  <!-- ══ The instrument ══ -->
+  <section class="stage">
+    <p class="eyebrow">Real-time speech mirror</p>
+    <h1 class="thesis">
+      <span class="line">Hear yourself the way</span>
+      <span class="line">a <em>room</em> hears you.</span>
+    </h1>
+
+    <div class="console">
+
+      <!-- Left rail: what your voice is doing right now -->
+      <aside class="rail" aria-label="Live voice meters">
+        <div class="fader" id="fader-energy">
+          <span class="fader-name">Volume</span>
+          <span class="fader-read" id="read-energy">—</span>
+          <span class="fader-track"><span class="fader-fill"></span></span>
+        </div>
+        <div class="fader" id="fader-pitch">
+          <span class="fader-name">Pitch</span>
+          <span class="fader-read" id="read-pitch">—</span>
+          <span class="fader-track"><span class="fader-fill"></span></span>
+        </div>
+      </aside>
+
+      <!-- Signature: the voiceprint is the button, the meter and the score -->
+      <div class="voiceprint">
+        <canvas id="voiceprint" width="520" height="520" aria-hidden="true"></canvas>
+        <button id="mic" class="mic" aria-label="Start listening">
+          <span class="mic-glyph" id="mic-glyph">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"
+                 stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/>
+              <path d="M19 11v1a7 7 0 0 1-14 0v-1"/>
+              <line x1="12" y1="19" x2="12" y2="22"/>
+            </svg>
+          </span>
+        </button>
+        <div class="score" id="score" aria-live="polite">
+          <span class="score-num" id="score-num">—</span>
+          <span class="score-cap">confidence</span>
+        </div>
+      </div>
+
+      <!-- Right rail: what the score is made of -->
+      <aside class="rail rail-end" aria-label="Confidence breakdown">
+        <div class="part" data-part="wpm"><span>Pace</span><i><b id="bd-wpm"></b></i></div>
+        <div class="part" data-part="pitch"><span>Variety</span><i><b id="bd-pitch"></b></i></div>
+        <div class="part" data-part="energy"><span>Volume</span><i><b id="bd-energy"></b></i></div>
+        <div class="part" data-part="filler"><span>Fluency</span><i><b id="bd-filler"></b></i></div>
+      </aside>
     </div>
 
-    <div class="app-container">
+    <p class="prompt" id="prompt">Press to start listening</p>
 
-        <!-- Header -->
-        <header class="app-header">
-            <div class="logo-group">
-                <div class="logo-icon" id="logo-pulse">
-                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
-                        <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
-                        <line x1="12" y1="19" x2="12" y2="23"/>
-                        <line x1="8" y1="23" x2="16" y2="23"/>
-                    </svg>
-                </div>
-                <div>
-                    <h1 class="logo-text">SpeakTwin</h1>
-                    <p class="logo-tagline">AI Communication Mirror</p>
-                </div>
-            </div>
-            <div class="status-badge" id="status-badge">
-                <span class="status-dot" id="status-dot"></span>
-                <span class="status-text" id="status-text">Idle</span>
-            </div>
+    <!-- The one thing the coach wants you to hear -->
+    <p class="insight" id="insight">Speak for a few seconds and this will tell you what a listener notices first.</p>
+  </section>
+
+  <!-- ══ Readouts ══ -->
+  <section class="readouts" aria-label="Session metrics">
+    <article class="cell" data-cell="wpm">
+      <span class="cell-val" id="val-wpm">0</span>
+      <span class="cell-cap">words / min</span>
+      <span class="cell-note" id="note-wpm">120–160 reads as natural</span>
+    </article>
+    <article class="cell" data-cell="filler">
+      <span class="cell-val" id="val-filler">0</span>
+      <span class="cell-cap">filler words</span>
+      <span class="cell-note" id="note-filler">um, uh, like, you know</span>
+    </article>
+    <article class="cell" data-cell="clarity">
+      <span class="cell-val" id="val-clarity">0</span>
+      <span class="cell-cap">clarity</span>
+      <span class="cell-note" id="note-clarity">how varied your wording is</span>
+    </article>
+    <article class="cell" data-cell="pause">
+      <span class="cell-val" id="val-pause">0<i>%</i></span>
+      <span class="cell-cap">silence</span>
+      <span class="cell-note" id="note-pause">pauses are not a problem</span>
+    </article>
+  </section>
+
+  <!-- ══ Words ══ -->
+  <section class="lower">
+
+    <article class="panel panel-wide">
+      <header class="panel-head">
+        <h2>Transcript</h2>
+        <span class="legend">
+          <span class="chip chip-key">keyword</span>
+          <span class="chip chip-fill">filler</span>
+        </span>
+      </header>
+      <div class="scroll" id="transcript-scroll">
+        <p class="empty" id="transcript-empty">Your words will appear here as you speak.</p>
+        <div id="transcript"></div>
+      </div>
+    </article>
+
+    <div class="stack">
+      <article class="panel">
+        <header class="panel-head"><h2>What you leaned on</h2></header>
+        <div class="tags" id="fillers"><p class="empty">No fillers yet.</p></div>
+      </article>
+
+      <article class="panel">
+        <header class="panel-head"><h2>Words that landed</h2></header>
+        <div class="tags" id="keywords"><p class="empty">Say a target word to collect it.</p></div>
+      </article>
+
+      <article class="panel panel-ai" id="ai" hidden>
+        <header class="panel-head">
+          <h2>Neural read</h2>
+          <span class="badge">models on</span>
         </header>
+        <div class="ai-rows" id="ai-rows"></div>
+      </article>
 
-        <!-- Main Grid -->
-        <main class="main-grid">
-
-            <!-- Left Column: Controls + Confidence -->
-            <section class="col-left">
-
-                <!-- Control Card -->
-                <div class="glass-card control-card">
-                    <button id="mic-btn" class="mic-button" aria-label="Toggle Microphone">
-                        <div class="mic-button-ring"></div>
-                        <div class="mic-button-inner">
-                            <svg class="mic-icon" id="mic-icon-svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
-                                <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
-                                <line x1="12" y1="19" x2="12" y2="23"/>
-                                <line x1="8" y1="23" x2="16" y2="23"/>
-                            </svg>
-                        </div>
-                    </button>
-                    <p class="control-label" id="control-label">Tap to start analysis</p>
-                </div>
-
-                <!-- Confidence Score -->
-                <div class="glass-card confidence-card">
-                    <h2 class="card-title">Confidence Score</h2>
-                    <div class="score-ring-wrapper">
-                        <svg class="score-ring" viewBox="0 0 120 120">
-                            <circle class="score-ring-bg" cx="60" cy="60" r="52"/>
-                            <circle class="score-ring-fill" id="score-ring-fill" cx="60" cy="60" r="52"/>
-                        </svg>
-                        <div class="score-value" id="score-value">0</div>
-                    </div>
-                    <div class="score-breakdown" id="score-breakdown">
-                        <div class="breakdown-item">
-                            <span class="breakdown-label">WPM</span>
-                            <div class="breakdown-bar"><div class="breakdown-fill" id="bd-wpm"></div></div>
-                        </div>
-                        <div class="breakdown-item">
-                            <span class="breakdown-label">Pitch</span>
-                            <div class="breakdown-bar"><div class="breakdown-fill" id="bd-pitch"></div></div>
-                        </div>
-                        <div class="breakdown-item">
-                            <span class="breakdown-label">Volume</span>
-                            <div class="breakdown-bar"><div class="breakdown-fill" id="bd-energy"></div></div>
-                        </div>
-                        <div class="breakdown-item">
-                            <span class="breakdown-label">Fluency</span>
-                            <div class="breakdown-bar"><div class="breakdown-fill" id="bd-filler"></div></div>
-                        </div>
-                    </div>
-                </div>
-            </section>
-
-            <!-- Center Column: Visualizers & Feedback -->
-            <section class="col-center">
-
-                <!-- Meters -->
-                <div class="glass-card meters-card">
-                    <div class="meters-grid">
-                        
-                        <!-- Energy Meter -->
-                        <div class="meter-block">
-                            <h3 class="meter-title">Energy</h3>
-                            <div class="meter-visual">
-                                <div class="meter-bars" id="energy-bars">
-                                    <span></span><span></span><span></span><span></span><span></span>
-                                    <span></span><span></span><span></span><span></span><span></span>
-                                    <span></span><span></span><span></span><span></span><span></span>
-                                    <span></span><span></span><span></span><span></span><span></span>
-                                </div>
-                            </div>
-                            <p class="meter-value" id="energy-value">0.000</p>
-                        </div>
-
-                        <!-- Pitch Meter -->
-                        <div class="meter-block">
-                            <h3 class="meter-title">Pitch</h3>
-                            <div class="meter-visual">
-                                <div class="meter-bars pitch-bars" id="pitch-bars">
-                                    <span></span><span></span><span></span><span></span><span></span>
-                                    <span></span><span></span><span></span><span></span><span></span>
-                                    <span></span><span></span><span></span><span></span><span></span>
-                                    <span></span><span></span><span></span><span></span><span></span>
-                                </div>
-                            </div>
-                            <p class="meter-value" id="pitch-value">0 Hz</p>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Stats Row -->
-                <div class="stats-row">
-                    <div class="glass-card stat-card">
-                        <div class="stat-icon wpm-icon">
-                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
-                        </div>
-                        <div>
-                            <p class="stat-value" id="wpm-value">0</p>
-                            <p class="stat-label">WPM</p>
-                        </div>
-                    </div>
-                    <div class="glass-card stat-card">
-                        <div class="stat-icon filler-icon">
-                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
-                        </div>
-                        <div>
-                            <p class="stat-value" id="filler-value">0</p>
-                            <p class="stat-label">Fillers</p>
-                        </div>
-                    </div>
-                    <div class="glass-card stat-card">
-                        <div class="stat-icon pause-icon">
-                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
-                        </div>
-                        <div>
-                            <p class="stat-value" id="pause-value">0%</p>
-                            <p class="stat-label">Pauses</p>
-                        </div>
-                    </div>
-                    <div class="glass-card stat-card">
-                        <div class="stat-icon clarity-icon">
-                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
-                        </div>
-                        <div>
-                            <p class="stat-value" id="clarity-value">0</p>
-                            <p class="stat-label">Clarity</p>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Live Feedback -->
-                <div class="glass-card feedback-card">
-                    <h2 class="card-title">
-                        <span class="live-dot" id="live-dot"></span>
-                        Live Feedback
-                    </h2>
-                    <div class="feedback-primary" id="feedback-primary">
-                        Ready to analyze your speech
-                    </div>
-                    <div class="feedback-list" id="feedback-list">
-                        <!-- Feedback items injected by JS -->
-                    </div>
-                </div>
-
-            </section>
-
-            <!-- Right Column: Transcript -->
-            <section class="col-right">
-                <div class="glass-card transcript-card">
-                    <div class="transcript-header">
-                        <h2 class="card-title">Transcript</h2>
-                        <button class="toggle-btn" id="transcript-toggle" aria-label="Toggle Transcript">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
-                        </button>
-                    </div>
-                    <div class="transcript-body" id="transcript-body">
-                        <p class="transcript-placeholder" id="transcript-placeholder">
-                            Your speech will appear here...
-                        </p>
-                        <div class="transcript-text" id="transcript-text"></div>
-                    </div>
-                </div>
-
-                <!-- Filler Details -->
-                <div class="glass-card filler-card">
-                    <h2 class="card-title">Filler Breakdown</h2>
-                    <div class="filler-details" id="filler-details">
-                        <p class="transcript-placeholder">No fillers detected yet</p>
-                    </div>
-                </div>
-
-                <!-- Keywords Hit -->
-                <div class="glass-card keyword-card">
-                    <h2 class="card-title">Target Keywords</h2>
-                    <div class="keyword-pool" id="keyword-pool">
-                        <p class="transcript-placeholder" id="keyword-placeholder">Speak target words to highlight...</p>
-                        <!-- Injected span pills -->
-                    </div>
-                </div>
-            </section>
-
-        </main>
-
-        <!-- Footer -->
-        <footer class="app-footer">
-            <p>SpeakTwin v1.0 &mdash; AI Communication Mirror &mdash; Built for better speaking</p>
-        </footer>
-
+      <article class="panel" id="notes-panel">
+        <header class="panel-head"><h2>Coaching notes</h2></header>
+        <div class="notes" id="notes"><p class="empty">Notes appear once you start.</p></div>
+      </article>
     </div>
+  </section>
+</main>
 
-    <script src="app.js?v=3"></script>
+<footer class="foot">
+  <span>SpeakTwin</span>
+  <span class="foot-sep"></span>
+  <span id="foot-engine">Nothing leaves your machine unless a cloud engine is configured</span>
+</footer>
+
+<script src="voiceprint.js?v=5"></script>
+<script src="app.js?v=5"></script>
 </body>
 </html>

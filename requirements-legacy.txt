@@ -1,0 +1,17 @@
+# ============================================================
+# SpeakTwin - Legacy prototype dependencies
+#
+# Needed ONLY by the standalone scripts kept for reference:
+#   * server.py                          (server-side mic + librosa pitch)
+#   * audio_engine.py                    (console loop)
+#   * backend/services/audio_capture.py  (server-side mic capture)
+#
+# The deployed backend does not import any of these: audio is captured in
+# the browser and decoded with soundfile, and pitch is computed with scipy.
+# Installing them is optional.
+# ============================================================
+
+-r requirements.txt
+
+sounddevice>=0.4.0,<1.0.0
+librosa>=0.10.0,<1.0.0
