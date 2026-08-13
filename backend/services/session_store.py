@@ -89,6 +89,14 @@ class Session:
     speaker_similarity: Optional[float] = None
     speaker_changes: int = 0
 
+    # Posture, folded in from the camera on its own cadence
+    posture_batches: int = 0
+    posture_ema: Optional[float] = None
+    posture_best: int = 0
+    gesture_rate_ema: Optional[float] = None
+    sway_ema: Optional[float] = None
+    posture_flags: Dict[str, int] = field(default_factory=dict)
+
     # ------------------------------------------------------------------
     @property
     def duration_seconds(self) -> float:
@@ -157,6 +165,35 @@ class Session:
 
         self.speaker_similarity = similarity
         return similarity
+
+    def record_posture(self, score: Optional[int], movement: Dict[str, Any],
+                       messages: List[Dict[str, str]], alpha: float) -> None:
+        """Fold one posture batch into the session trend."""
+        self.updated_at = time.time()
+        self.posture_batches += 1
+
+        if score is not None:
+            self.posture_ema = _ema(self.posture_ema, float(score), alpha)
+            self.posture_best = max(self.posture_best, score)
+
+        if movement.get("detected"):
+            rate = movement.get("gesture_rate")
+            if rate is not None:
+                self.gesture_rate_ema = _ema(self.gesture_rate_ema, float(rate), alpha)
+            sway = movement.get("sway")
+            if sway is not None:
+                self.sway_ema = _ema(self.sway_ema, float(sway), alpha)
+
+        # Count which problems recur, so the end-of-session report can name
+        # the persistent habit rather than whatever happened to be last.
+        for message in messages:
+            if message.get("type") == "warning":
+                key = message.get("category", "other")
+                self.posture_flags[key] = self.posture_flags.get(key, 0) + 1
+
+    @property
+    def posture_score(self) -> Optional[int]:
+        return int(round(self.posture_ema)) if self.posture_ema is not None else None
 
     def record(self, result: Dict[str, Any], audio_seconds: float,
                alpha: float) -> None:
@@ -234,6 +271,14 @@ class Session:
             "avg_pitch": round(self.pitch_ema, 1) if self.pitch_ema is not None else None,
             "speaker_similarity": self.speaker_similarity,
             "speaker_changes": self.speaker_changes,
+            "posture_batches": self.posture_batches,
+            "avg_posture": self.posture_score,
+            "best_posture": self.posture_best or None,
+            "avg_gesture_rate": (
+                round(self.gesture_rate_ema, 1)
+                if self.gesture_rate_ema is not None else None
+            ),
+            "posture_habits": dict(self.posture_flags),
         }
 
     def report(self) -> Dict[str, Any]:

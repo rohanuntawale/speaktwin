@@ -14,8 +14,20 @@
 // Same-origin: the backend serves this page, so hard-coding a
 // port only creates a mismatch to keep in sync.
 const API_BASE = window.SPEAKTWIN_API_BASE || "";
-const CHUNK_MS = 2500;
 const TARGET_RATE = 16000;
+
+// ── Utterance segmentation ───────────────────────────────────
+// Audio is cut on natural pauses, not on a fixed clock. Whisper was
+// trained on 30 s windows; handing it arbitrary 2.5 s slices chops words
+// in half and strips the context it needs, which is the single largest
+// cause of transcripts that do not resemble what was said.
+const SILENCE_RMS = 0.012;      // below this a block counts as quiet
+const SILENCE_HOLD_MS = 650;    // quiet for this long ends an utterance
+const MIN_UTTERANCE_MS = 700;   // shorter than this is a cough, not speech
+// Decoding runs at roughly 1x realtime on CPU, so this also bounds the
+// worst-case wait: an 8 s sentence costs about 8 s of transcription.
+const MAX_UTTERANCE_MS = 8000;  // force a cut so feedback never stalls
+const PREROLL_MS = 300;         // keep audio from just before speech began
 
 // ── Elements ─────────────────────────────────────────────────
 const $ = (id) => document.getElementById(id);
@@ -56,6 +68,20 @@ const el = {
   ai: $("ai"),
   aiRows: $("ai-rows"),
   footEngine: $("foot-engine"),
+
+  // Camera / posture
+  camBtn: $("cam-btn"),
+  mirror: $("mirror"),
+  camVideo: $("cam-video"),
+  camOverlay: $("cam-overlay"),
+  camHint: $("cam-hint"),
+  mirrorCue: $("mirror-cue"),
+  postureRead: $("posture-read"),
+  postureNum: $("posture-num"),
+  postureBars: $("posture-bars"),
+  postureNotes: $("posture-notes"),
+  cellPresence: $("cell-presence"),
+  valPresence: $("val-presence"),
 };
 
 // ── State ────────────────────────────────────────────────────
@@ -67,6 +93,7 @@ let source = null;
 let processor = null;
 let analyser = null;
 let voiceprint = null;
+let pendingFlush = null;   // sends the in-progress utterance on stop
 
 let totals = { fillers: {}, keywords: {} };
 
@@ -148,27 +175,68 @@ async function startListening() {
     source.connect(analyser);
     voiceprint.listen(analyser);
 
-    // Slow clock: accumulate raw samples for chunk uploads.
+    // Slow clock: accumulate raw samples and cut them on natural pauses.
     processor = audioCtx.createScriptProcessor(4096, 1, 1);
 
     // The browser may ignore the sample-rate hint, so send what we
     // actually got — the backend resamples rather than assuming.
     const rate = audioCtx.sampleRate;
-    const needed = Math.round(rate * (CHUNK_MS / 1000));
-    let buffer = [];
+    const blockMs = (4096 / rate) * 1000;
+    const prerollBlocks = Math.max(1, Math.round(PREROLL_MS / blockMs));
 
-    processor.onaudioprocess = async (e) => {
+    let speech = [];        // audio of the utterance in progress
+    let preroll = [];       // rolling buffer of the moments before it
+    let quietMs = 0;
+    let speaking = false;
+
+    const flush = async () => {
+      const samples = new Float32Array(speech);
+      speech = [];
+      preroll = [];
+      quietMs = 0;
+      speaking = false;
+
+      if (samples.length < (MIN_UTTERANCE_MS / 1000) * rate) return;
+      setStatus("Transcribing");
+      const result = await apiAnalyze(encodeWav(samples, rate));
+      if (result) render(result);
+    };
+
+    processor.onaudioprocess = (e) => {
       if (!recording) return;
       const pcm = e.inputBuffer.getChannelData(0);
-      for (let i = 0; i < pcm.length; i++) buffer.push(pcm[i]);
 
-      if (buffer.length >= needed) {
-        const slice = new Float32Array(buffer.slice(0, needed));
-        buffer = buffer.slice(needed);
-        const result = await apiAnalyze(encodeWav(slice, rate));
-        if (result) render(result);
+      let sum = 0;
+      for (let i = 0; i < pcm.length; i++) sum += pcm[i] * pcm[i];
+      const rms = Math.sqrt(sum / pcm.length);
+      const loud = rms >= SILENCE_RMS;
+
+      if (loud) {
+        if (!speaking) {
+          // Splice in the pre-roll so the first consonant is not clipped.
+          speaking = true;
+          preroll.forEach((b) => { for (let i = 0; i < b.length; i++) speech.push(b[i]); });
+          preroll = [];
+        }
+        quietMs = 0;
+      }
+
+      if (speaking) {
+        for (let i = 0; i < pcm.length; i++) speech.push(pcm[i]);
+        if (!loud) quietMs += blockMs;
+
+        const heldMs = (speech.length / rate) * 1000;
+        // Cut on a settled pause, or force one so feedback never stalls
+        // during a long unbroken stretch.
+        if (quietMs >= SILENCE_HOLD_MS || heldMs >= MAX_UTTERANCE_MS) flush();
+      } else {
+        preroll.push(new Float32Array(pcm));
+        if (preroll.length > prerollBlocks) preroll.shift();
       }
     };
+
+    // Send whatever is still buffered when the user stops mid-sentence.
+    pendingFlush = flush;
 
     source.connect(processor);
     processor.connect(audioCtx.destination);
@@ -184,6 +252,13 @@ async function startListening() {
 async function stopListening() {
   setLive(false);
   if (voiceprint) voiceprint.stop();
+
+  // Don't discard the sentence in progress just because they pressed stop.
+  if (pendingFlush) {
+    const flush = pendingFlush;
+    pendingFlush = null;
+    try { await flush(); } catch (_) { /* best effort */ }
+  }
 
   if (stream) stream.getTracks().forEach((t) => t.stop());
   if (processor) processor.disconnect();
@@ -544,6 +619,126 @@ function summarise(report) {
 // ── Boot ─────────────────────────────────────────────────────
 voiceprint = new Voiceprint($("voiceprint"));
 setLive(false);
+
+// ── Camera / posture ─────────────────────────────────────────
+let poseTracker = null;
+
+if (el.camBtn) {
+  el.camBtn.addEventListener("click", async () => {
+    if (poseTracker && poseTracker.active) {
+      poseTracker.stop();
+      el.camBtn.textContent = "Turn on camera";
+      el.camBtn.setAttribute("aria-pressed", "false");
+      el.mirror.classList.remove("on");
+      el.mirrorCue.classList.remove("show");
+      el.camHint.textContent = "Camera off";
+      return;
+    }
+
+    if (!poseTracker) {
+      poseTracker = new PoseTracker({
+        video: el.camVideo,
+        canvas: el.camOverlay,
+        onBatch: sendPose,
+        onStatus: (text) => { if (el.camHint) el.camHint.textContent = text; },
+        onGuidance: showCue,
+      });
+    }
+
+    try {
+      el.camBtn.disabled = true;
+      await poseTracker.start();
+      el.camBtn.textContent = "Turn off camera";
+      el.camBtn.setAttribute("aria-pressed", "true");
+      el.mirror.classList.add("on");
+      el.camHint.textContent = "Watching";
+    } catch (err) {
+      console.error("[SpeakTwin] camera", err);
+      el.camHint.textContent = "Camera blocked";
+      el.postureNotes.innerHTML =
+        `<p class="empty">Camera access is blocked. Allow it in your browser's ` +
+        `site settings, then turn it on again.</p>`;
+    } finally {
+      el.camBtn.disabled = false;
+    }
+  });
+}
+
+/** The per-frame nudge. Distinct from the server's considered coaching. */
+function showCue(cue) {
+  if (!el.mirrorCue) return;
+  if (!cue || !cue.text) {
+    el.mirrorCue.classList.remove("show");
+    return;
+  }
+  el.mirrorCue.textContent = cue.text;
+  el.mirrorCue.className = `mirror-cue show ${cue.tone}`;
+}
+
+async function sendPose(batch) {
+  try {
+    const res = await fetch(`${API_BASE}/api/pose`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ...batch, session_id: sessionId }),
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    renderPosture(await res.json());
+  } catch (err) {
+    console.warn("[SpeakTwin] pose", err);
+  }
+}
+
+const POSTURE_LABELS = {
+  alignment: "Alignment",
+  head: "Head position",
+  openness: "Openness",
+  steadiness: "Steadiness",
+};
+
+function renderPosture(p) {
+  if (!p) return;
+
+  if (!p.detected) {
+    el.postureRead.hidden = true;
+    el.postureNotes.hidden = false;
+    el.postureNotes.innerHTML =
+      `<p class="empty">${escapeHtml(p.message)}</p>`;
+    return;
+  }
+
+  el.postureRead.hidden = false;
+  el.postureNum.textContent = p.score == null ? "—" : p.score;
+  el.postureNum.className =
+    "posture-num" + (p.score >= 75 ? " good" : p.score >= 50 ? "" : " poor");
+
+  // Only the dimensions the camera could actually see are shown; a
+  // speaker framed chest-up should not see a zeroed "steadiness".
+  el.postureBars.innerHTML = (p.measured || [])
+    .map((key) => {
+      const v = p.breakdown[key] ?? 0;
+      const tone = v >= 75 ? "good" : v >= 50 ? "" : "poor";
+      return `<div class="pbar"><span>${POSTURE_LABELS[key] || key}</span>` +
+             `<i><b class="${tone}" style="width:${v}%"></b></i></div>`;
+    })
+    .join("");
+
+  el.postureNotes.hidden = false;
+  const order = { warning: 0, info: 1, success: 2 };
+  el.postureNotes.innerHTML = [...(p.feedback || [])]
+    .sort((a, b) => (order[a.type] ?? 3) - (order[b.type] ?? 3))
+    .slice(0, 4)
+    .map((m, i) =>
+      `<div class="note ${m.type}" style="animation-delay:${i * 40}ms">` +
+      `<span class="note-tag">${escapeHtml(m.category)}</span>` +
+      `<span>${escapeHtml(m.text)}</span></div>`)
+    .join("");
+
+  if (p.presence_score != null && el.cellPresence) {
+    el.cellPresence.hidden = false;
+    countTo(el.valPresence, p.presence_score);
+  }
+}
 
 // Tell the user which engine is actually running, rather than
 // claiming privacy the configuration may not provide.

@@ -70,6 +70,15 @@ class SessionSummary(BaseModel):
     speaker_changes: int = Field(
         default=0, description="Times the speaker appears to have changed."
     )
+    posture_batches: int = 0
+    avg_posture: Optional[int] = None
+    best_posture: Optional[int] = None
+    avg_gesture_rate: Optional[float] = None
+    posture_habits: Dict[str, int] = Field(
+        default_factory=dict,
+        description="Recurring posture warnings by category, so the report "
+                    "can name the habit rather than the last blip.",
+    )
 
 
 class SessionReport(SessionSummary):
@@ -168,6 +177,65 @@ class AnalysisResponse(BaseModel):
         description="Voice match against the session reference. Below the "
                     "threshold adds a 'speaker_changed' warning.",
     )
+
+
+# ---------------------------------------------------------------------------
+# Posture
+# ---------------------------------------------------------------------------
+class PoseLandmark(BaseModel):
+    """One MediaPipe landmark, normalised to the frame."""
+    x: float
+    y: float
+    z: float = 0.0
+    visibility: float = 1.0
+
+
+class PoseFrameIn(BaseModel):
+    t: float = Field(default=0.0, description="Seconds since the batch began")
+    landmarks: List[PoseLandmark]
+
+
+class PoseBatchRequest(BaseModel):
+    """
+    A batch of pose frames.
+
+    Video never leaves the browser — MediaPipe runs client-side and only
+    these landmarks are sent, which is both a privacy property and the
+    reason a batch is ~25 KB rather than megabytes of frames.
+    """
+    session_id: Optional[str] = None
+    duration: float = Field(default=2.5, gt=0, description="Seconds the batch covers")
+    aspect: float = Field(
+        default=1.0, gt=0,
+        description="Video width ÷ height. Required for correct angles: "
+                    "MediaPipe normalises x and y independently, so a "
+                    "non-square frame skews every angle without it.",
+    )
+    frames: List[PoseFrameIn]
+
+
+class PostureResponse(BaseModel):
+    detected: bool
+    message: str
+    score: Optional[int] = None
+    status: str = "not_detected"
+    breakdown: Dict[str, int] = Field(default_factory=dict)
+    measured: List[str] = Field(default_factory=list)
+
+    pose: Dict[str, Any] = Field(default_factory=dict)
+    movement: Dict[str, Any] = Field(default_factory=dict)
+    bands: Dict[str, str] = Field(default_factory=dict)
+    feedback: List[FeedbackMessage] = Field(default_factory=list)
+
+    frames_used: int = 0
+    frames_received: int = 0
+
+    presence_score: Optional[int] = Field(
+        default=None,
+        description="Voice and body fused. Null until both have been seen.",
+    )
+    session_id: Optional[str] = None
+    warnings: List[str] = Field(default_factory=list)
 
 
 class SessionCreatedResponse(BaseModel):

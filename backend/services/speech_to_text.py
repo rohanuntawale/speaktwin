@@ -204,15 +204,25 @@ def engine_ready() -> bool:
 def _run_local(model, audio: np.ndarray, initial_prompt: Optional[str],
                use_vad: bool):
     """One faster-whisper decode pass."""
+    settings = get_settings()
+
     segments_gen, _info = model.transcribe(
         audio,
-        beam_size=1,
-        language="en",
+        beam_size=settings.whisper_beam_size,
+        language=settings.whisper_language,
         vad_filter=use_vad,
         # Prevents the decoder from looping on its own previous output,
         # which is the classic cause of repeated-phrase hallucinations.
         condition_on_previous_text=False,
         initial_prompt=initial_prompt or None,
+        # Temperature fallback: retry a segment at rising temperature when
+        # the greedy result trips one of the guards below. Whisper's own
+        # reference implementation does this; skipping it is a large part
+        # of why short-chunk transcription reads as gibberish.
+        temperature=[0.0, 0.2, 0.4, 0.6, 0.8, 1.0],
+        no_speech_threshold=settings.whisper_no_speech_threshold,
+        log_prob_threshold=settings.whisper_logprob_threshold,
+        compression_ratio_threshold=settings.whisper_compression_threshold,
     )
     return " ".join(seg.text.strip() for seg in segments_gen)
 

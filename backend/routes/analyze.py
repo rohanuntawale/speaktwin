@@ -24,10 +24,22 @@ from fastapi.concurrency import run_in_threadpool  # type: ignore
 
 from backend.schemas import (  # type: ignore
     AnalysisResponse,
+    PoseBatchRequest,
+    PostureResponse,
     SessionCreatedResponse,
     SessionReport,
     SessionSummary,
     StatusResponse,
+)
+from backend.services.gesture_analysis import analyse_movement  # type: ignore
+from backend.services.gesture_analysis import interpret as interpret_movement  # type: ignore
+from backend.services.pose_analysis import PoseFrame, analyse_frames  # type: ignore
+from backend.services.pose_analysis import interpret as interpret_pose  # type: ignore
+from backend.services.posture_feedback import (  # type: ignore
+    generate_posture_feedback,
+    posture_status,
+    presence_score,
+    score_posture,
 )
 from backend.services.audio_analysis import analyze_audio  # type: ignore
 from backend.services.audio_io import AudioDecodeError, duration_seconds, prepare  # type: ignore
@@ -39,12 +51,20 @@ from backend.services.keyword_detection import detect_keywords  # type: ignore
 from backend.services.session_store import session_store  # type: ignore
 from backend.services.speech_to_text import transcribe  # type: ignore
 from backend.utils.config import get_settings  # type: ignore
-from backend.utils.helpers import SAMPLE_RATE, SILENCE_DBFS, get_logger  # type: ignore
+from backend.utils.helpers import (  # type: ignore
+    POSE_MIN_USABLE_FRAMES,
+    SAMPLE_RATE,
+    SILENCE_DBFS,
+    get_logger,
+)
 
 logger = get_logger(__name__)
 router = APIRouter()
 
 UPLOAD_READ_CHUNK = 64 * 1024
+# ~30 fps for 10 s. Enough headroom for any sane batch, low enough that a
+# malicious payload cannot make the server chew through millions of points.
+MAX_POSE_FRAMES = 300
 
 
 # ---------------------------------------------------------------------------
@@ -301,6 +321,89 @@ async def analyze_blob(
     return await run_in_threadpool(
         _perform_full_analysis, audio, session_id, source_sr
     )
+
+
+@router.post("/pose", response_model=PostureResponse)
+async def analyze_pose(batch: PoseBatchRequest):
+    """
+    Score a batch of pose landmarks for posture and gesture.
+
+    MediaPipe runs in the browser, so video never reaches the server —
+    only landmark coordinates, which keeps a batch around 25 KB.
+    """
+    if not batch.frames:
+        raise HTTPException(status_code=400, detail="No pose frames supplied.")
+    if len(batch.frames) > MAX_POSE_FRAMES:
+        raise HTTPException(
+            status_code=413,
+            detail=f"Too many frames in one batch (max {MAX_POSE_FRAMES}).",
+        )
+
+    return await run_in_threadpool(_score_pose_batch, batch)
+
+
+def _score_pose_batch(batch: PoseBatchRequest) -> Dict[str, Any]:
+    """Blocking posture pipeline — call via threadpool."""
+    settings = get_settings()
+    warnings: List[str] = []
+
+    frames = [
+        PoseFrame([lm.model_dump() for lm in frame.landmarks], batch.aspect)
+        for frame in batch.frames
+    ]
+    pose = analyse_frames(frames)
+
+    usable_ratio = (
+        pose.get("usable_frames", 0) / len(frames) if frames else 0.0
+    )
+    if pose.get("detected") and usable_ratio < POSE_MIN_USABLE_FRAMES:
+        # Seen in too few frames to say anything responsibly.
+        warnings.append("partially_out_of_frame")
+        pose = {**pose, "detected": False}
+
+    series = pose.pop("frames", [])
+    movement = analyse_movement(series, batch.duration)
+
+    pose_bands = interpret_pose(pose)
+    movement_bands = interpret_movement(movement)
+
+    scored = score_posture(pose, movement)
+    messages = generate_posture_feedback(pose, movement, pose_bands, movement_bands)
+    status = posture_status(scored["score"], messages)
+
+    session = session_store.get(batch.session_id)
+    presence = None
+    if session is not None:
+        session.record_posture(scored["score"], movement, messages,
+                               settings.smoothing_alpha)
+        presence = presence_score(
+            session.summary().get("avg_confidence"), session.posture_score
+        )
+    elif batch.session_id:
+        warnings.append("session_not_found")
+
+    headline = next(
+        (m["text"] for m in messages if m["type"] == "warning"),
+        messages[0]["text"] if messages else "Looking good.",
+    )
+
+    return {
+        "detected": bool(pose.get("detected")),
+        "message": headline,
+        "score": scored["score"],
+        "status": status,
+        "breakdown": scored["breakdown"],
+        "measured": scored["measured"],
+        "pose": {k: v for k, v in pose.items() if k != "frames"},
+        "movement": movement,
+        "bands": {**pose_bands, **movement_bands},
+        "feedback": messages,
+        "frames_used": pose.get("usable_frames", 0),
+        "frames_received": len(frames),
+        "presence_score": presence,
+        "session_id": batch.session_id,
+        "warnings": warnings,
+    }
 
 
 @router.post("/diarize")

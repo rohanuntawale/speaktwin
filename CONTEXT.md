@@ -4,7 +4,7 @@
 > Full architecture lives in [docs/SpeakTwin-Technical-Guide.pdf](docs/SpeakTwin-Technical-Guide.pdf);
 > this file is the *current state and open threads*, not a re-explanation.
 
-**Last updated:** 2026-08-12 · **Version:** 1.1.0 · **Tests:** 158 passing
+**Last updated:** 2026-08-12 · **Version:** 1.2.0 · **Tests:** 196 passing
 
 ---
 
@@ -122,6 +122,52 @@ Unblocks AMI, TED-LIUM, Common Voice, VoxPopuli, and the pyannote model.
 
 ---
 
+## 3a. Posture & gesture (v1.2)
+
+**Pose runs in the browser, scoring runs in Python.** MediaPipe Pose
+(`frontend/pose.js`) detects 33 landmarks client-side; only those points are
+POSTed to `/api/pose`. Video never leaves the machine, and a 2.5 s batch is
+~25 KB instead of megabytes of frames.
+
+| Module | Measures |
+|---|---|
+| `pose_analysis.py` | shoulder tilt, head tilt, torso lean, openness, forward-head, hands in frame |
+| `gesture_analysis.py` | gesture count/rate/amplitude, sway, fidget ratio, stillness |
+| `posture_feedback.py` | 0–100 posture score, coaching copy, voice+body presence fusion |
+
+**The aspect-ratio trap.** MediaPipe normalises x and y *independently*
+against a frame that is almost never square, so computing an angle from raw
+values stretches it — level shoulders in 16:9 measure as tilted. Every angle
+is computed in aspect-corrected space, and there is a regression test for it.
+
+**Two rules the scoring follows:**
+- Never score what wasn't seen. Weights renormalise over the visible
+  dimensions, so a speaker framed chest-up isn't penalised for hips out of
+  shot. `measured` lists what counted.
+- Presence fusion falls back to whichever half exists — no camera must not
+  read as a 50% body score.
+
+Gesture rate is counted from *runs* of movement, not frames, so one arm sweep
+is one gesture. It is sampled at a fixed 10 fps client-side; changing that
+rate changes the measurement.
+
+**Live-cue hardening (post first real webcam test).** The per-frame cue was
+calling a chest-up slouch "Good posture": with hips out of frame only two
+checks ran, and neither could see a head craned at the screen. Fixes:
+- Model tier `lite` → **`full`** by default (`SPEAKTWIN_POSE_MODEL` override,
+  fallback chain full→lite). `lite`'s z/depth is too noisy for the
+  forward-head check — the most common webcam fault.
+- Live loop now checks **forward head** (ear-vs-shoulder depth, same
+  thresholds as the server) and **slump** (nose-above-shoulders ratio vs the
+  speaker's own session-best; absolute thresholds can't survive different
+  bodies/chairs/angles, so it self-calibrates with a slow-decay baseline and
+  fires only after ~24 sustained frames).
+- **"Good posture" must be earned**: never shown without depth evidence, and
+  only after ~30 consecutive clean frames. Silence, not praise, when the
+  evidence is partial. Corrections may interrupt the cue hold; praise may not.
+
+---
+
 ## 3b. Design language
 
 Concept: **a recording booth at night.** The room is cold blue-black at rest
@@ -189,6 +235,10 @@ Each has a regression test.
 | Canvas intro driven by frame count | Animation speed tied to frame rate; stalled where frames were scarce. Now time-based |
 | Canvas measured once at construction | Box is still 0 while fonts load. Now a `ResizeObserver` |
 | Grid/flex children at `min-width:auto` | Refused to shrink, so narrow viewports scrolled sideways |
+| STT on fixed 2.5 s slices | Whisper trained on 30 s windows; slices cut mid-word and stripped context. Now cut on natural pauses |
+| Score climbed into the mic at small widths | Percent positioning + fixed-px type: the instrument shrank, the "84" didn't. Now the score's centre is pinned to the mic-to-ring band (26.25% + translateY) and its type scales in cqi units with the instrument |
+| Mirror overlapped the breakdown rail | `.stage` caps at 1160px, so the mirror's side track was ~140px and its 160px min-width overflowed leftward into the rail at every viewport. Fixed: the rig breaks out of the stage cap (`min(1380px, …)`, centred), mirror `width: min(210px, 100%)` can never exceed its track, stacks below 1280px |
+| `tiny.en` + `beam_size=1`, no decode guards | Mangled ordinary speech. Now `base.en`, beam 5, temperature fallback + no-speech/logprob/compression guards |
 | Traceback in error responses | Leaked file paths and internals |
 | CORS `*` + credentials | Invalid per spec, rejected by browsers |
 | Transcript injected unescaped | HTML injection via STT output |
@@ -267,6 +317,16 @@ found by looking at the render rather than assuming it worked.
 > Screenshot note: headless Chrome will not render a window narrower than
 > ~500 px — it lays out wider and clips the capture. Sub-500 px checks need
 > real device emulation; 560 px renders cleanly.
+
+**2026-08-12 — STT accuracy + posture tracking (v1.2).**
+Fixed transcription: cut audio on natural pauses instead of a fixed 2.5 s
+clock, `tiny.en`→`base.en`, beam 1→5, added Whisper's temperature fallback
+and decode guards. Measured **16.8% WER** (digit-normalised) at ~1.05x
+realtime on CPU, on L2-accented read speech.
+
+Added camera posture and gesture tracking: MediaPipe in the browser,
+geometry and coaching in Python, `/api/pose`, session posture trend, and a
+voice+body presence score. Retired `camera_placeholder.py`. 158 → 196 tests.
 
 **Next up:** T5 and T6 are the blockers — both need external access (see §3).
 Everything else buildable is done. The remaining unblocked work is T7-class

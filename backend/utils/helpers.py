@@ -159,3 +159,69 @@ CONFIDENCE_WEIGHTS = {
     "energy": 0.20,
     "filler_penalty": 0.30,
 }
+
+# ---------------------------------------------------------------------------
+# Posture & Gesture
+# ---------------------------------------------------------------------------
+# MediaPipe Pose landmark indices (33-point model). Named because
+# `landmarks[12]` tells a reader nothing.
+POSE_NOSE = 0
+POSE_LEFT_EAR = 7
+POSE_RIGHT_EAR = 8
+POSE_LEFT_SHOULDER = 11
+POSE_RIGHT_SHOULDER = 12
+POSE_LEFT_ELBOW = 13
+POSE_RIGHT_ELBOW = 14
+POSE_LEFT_WRIST = 15
+POSE_RIGHT_WRIST = 16
+POSE_LEFT_HIP = 23
+POSE_RIGHT_HIP = 24
+POSE_LANDMARK_COUNT = 33
+
+# A landmark below this confidence is treated as not seen at all, rather
+# than trusted and quietly poisoning an average.
+POSE_MIN_VISIBILITY = 0.5
+# Fraction of a batch's frames that must be usable before the batch is
+# scored. Below this the speaker has probably left the frame.
+POSE_MIN_USABLE_FRAMES = 0.4
+
+# Angles in degrees. These are coaching thresholds, not clinical ones:
+# the question is "would an audience notice?", not "is this pathological?".
+SHOULDER_TILT_NOTICEABLE = 5.0
+SHOULDER_TILT_PRONOUNCED = 10.0
+HEAD_TILT_NOTICEABLE = 8.0
+HEAD_TILT_PRONOUNCED = 15.0
+TORSO_LEAN_NOTICEABLE = 7.0
+TORSO_LEAN_PRONOUNCED = 14.0
+
+# Head carried forward of the shoulders — the "screen reading" posture.
+# Normalised by shoulder width so it survives distance from the camera.
+FORWARD_HEAD_NOTICEABLE = 0.18
+FORWARD_HEAD_PRONOUNCED = 0.32
+
+# Shoulder width ÷ torso height. Low means hunched or closed off.
+OPENNESS_CLOSED = 0.62
+OPENNESS_OPEN = 0.85
+
+# Movement of the torso centre across a batch, in shoulder-widths.
+SWAY_STEADY = 0.04
+SWAY_RESTLESS = 0.12
+
+# Gestures per minute. Speakers are coached toward visible, purposeful
+# hands: too few reads as stiff, too many as distracting.
+GESTURE_RATE_LOW = 6.0
+GESTURE_RATE_HIGH = 40.0
+# Wrist travel per frame (shoulder-widths) that counts as gesturing.
+GESTURE_MOTION_THRESHOLD = 0.035
+# Rapid small movements that read as fidgeting rather than gesturing.
+FIDGET_MOTION_THRESHOLD = 0.012
+
+POSTURE_WEIGHTS = {
+    "alignment": 0.35,   # shoulders level, head upright, torso vertical
+    "head": 0.25,        # not carried forward
+    "openness": 0.20,    # not hunched or closed
+    "steadiness": 0.20,  # not swaying
+}
+
+# How speech and posture combine into one presence score.
+PRESENCE_WEIGHTS = {"voice": 0.6, "body": 0.4}

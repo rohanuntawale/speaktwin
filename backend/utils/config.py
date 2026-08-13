@@ -127,6 +127,11 @@ class Settings:
     whisper_device: str
     whisper_compute_type: str
     whisper_vad_filter: bool
+    whisper_beam_size: int
+    whisper_language: str
+    whisper_no_speech_threshold: float
+    whisper_logprob_threshold: float
+    whisper_compression_threshold: float
 
     # -- LLM coaching insight ---------------------------------------------
     openrouter_api_key: Optional[str]
@@ -294,10 +299,22 @@ def get_settings() -> Settings:
         groq_model=_str("GROQ_MODEL", "whisper-large-v3"),
         openai_api_key=_opt("OPENAI_API_KEY"),
         openai_model=_str("OPENAI_STT_MODEL", "whisper-1"),
-        whisper_model=_str("WHISPER_MODEL", "tiny.en"),
+        # base.en is roughly 3x the accuracy of tiny.en for about 2x the
+        # CPU. tiny.en mangles ordinary speech badly enough that it reads
+        # as broken, which is not a trade worth making by default.
+        whisper_model=_str("WHISPER_MODEL", "base.en"),
         whisper_device=_str("WHISPER_DEVICE", "cpu"),
         whisper_compute_type=_str("WHISPER_COMPUTE_TYPE", "int8"),
         whisper_vad_filter=_bool("WHISPER_VAD_FILTER", True),
+        # Greedy decoding (beam 1) is the fastest and the least accurate.
+        whisper_beam_size=_int("WHISPER_BEAM_SIZE", 5, minimum=1, maximum=10),
+        whisper_language=_str("WHISPER_LANGUAGE", "en"),
+        # Guards that make Whisper decline rather than invent. Without
+        # them it will confidently transcribe breath and room tone.
+        whisper_no_speech_threshold=_float("WHISPER_NO_SPEECH_THRESHOLD", 0.6,
+                                           minimum=0.0, maximum=1.0),
+        whisper_logprob_threshold=_float("WHISPER_LOGPROB_THRESHOLD", -1.0),
+        whisper_compression_threshold=_float("WHISPER_COMPRESSION_THRESHOLD", 2.4),
 
         # LLM coaching insight
         openrouter_api_key=_opt("OPENROUTER_API_KEY"),
