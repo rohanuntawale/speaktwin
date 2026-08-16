@@ -90,6 +90,9 @@ class Session:
     speaker_changes: int = 0
 
     # Posture, folded in from the camera on its own cadence
+    # The smallest sustained head-size ratio this speaker has shown is
+    # their neutral; forward-head is judged as drift above it.
+    head_scale_base: Optional[float] = None
     posture_batches: int = 0
     posture_ema: Optional[float] = None
     posture_best: int = 0
@@ -165,6 +168,36 @@ class Session:
 
         self.speaker_similarity = similarity
         return similarity
+
+    def calibrate_head_scale(self, scale: Optional[float],
+                             creep: float = 1.003) -> Optional[float]:
+        """
+        Fold one batch's head-size ratio into the baseline and return the
+        deviation from it (1.0 = at your neutral, 1.2 = head 20% closer).
+
+        The baseline tracks the smallest sustained value — sitting back
+        snaps it down instantly — and creeps upward slowly so one
+        anomalous reading cannot pin the reference forever.
+        """
+        if scale is None or scale <= 0:
+            return None
+
+        from backend.utils.helpers import HEAD_SCALE_CEILING  # type: ignore
+
+        if self.head_scale_base is None:
+            self.head_scale_base = scale
+        else:
+            self.head_scale_base = min(self.head_scale_base * creep, scale)
+
+        # Anatomical ceiling: a head reading wider than ~half the shoulder
+        # span at "neutral" means the speaker was already leaning in when
+        # first seen. Without this clamp, self-calibration enshrines that
+        # craned pose as the baseline and can never flag it.
+        self.head_scale_base = min(self.head_scale_base, HEAD_SCALE_CEILING)
+
+        if self.head_scale_base <= 1e-6:
+            return None
+        return round(scale / self.head_scale_base, 3)
 
     def record_posture(self, score: Optional[int], movement: Dict[str, Any],
                        messages: List[Dict[str, str]], alpha: float) -> None:

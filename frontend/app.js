@@ -72,9 +72,13 @@ const el = {
   // Camera / posture
   camBtn: $("cam-btn"),
   mirror: $("mirror"),
+  mirrorFrame: $("mirror-frame"),
   camVideo: $("cam-video"),
   camOverlay: $("cam-overlay"),
   camHint: $("cam-hint"),
+  camResTag: $("cam-res-tag"),
+  camCalibBanner: $("cam-calib-banner"),
+  camCalibText: $("cam-calib-text"),
   mirrorCue: $("mirror-cue"),
   postureRead: $("posture-read"),
   postureNum: $("posture-num"),
@@ -82,6 +86,28 @@ const el = {
   postureNotes: $("posture-notes"),
   cellPresence: $("cell-presence"),
   valPresence: $("val-presence"),
+
+  // Camera controls
+  camGridBtn: $("cam-grid-btn"),
+  camFullscreenBtn: $("cam-fullscreen-btn"),
+  camSnapBtn: $("cam-snap-btn"),
+  camFlipBtn: $("cam-flip-btn"),
+  camResetBtn: $("cam-reset-btn"),
+  camBrightness: $("cam-brightness"),
+  camBrightnessVal: $("cam-brightness-val"),
+  camContrast: $("cam-contrast"),
+  camContrastVal: $("cam-contrast-val"),
+  camZoom: $("cam-zoom"),
+  camZoomVal: $("cam-zoom-val"),
+  camControls: $("cam-controls"),
+  camFpsBadge: $("cam-fps-badge"),
+  camRecDot: $("cam-rec-dot"),
+  camDeviceRow: $("cam-device-row"),
+  camDeviceSelect: $("cam-device-select"),
+
+  // Posture ring
+  postureRing: $("posture-ring"),
+  postureRingFill: $("posture-ring-fill"),
 };
 
 // ── State ────────────────────────────────────────────────────
@@ -623,6 +649,126 @@ setLive(false);
 // ── Camera / posture ─────────────────────────────────────────
 let poseTracker = null;
 
+// ── Camera video filter & adjustment state ───────────────────
+let camBrightness = 100;  // %
+let camContrast   = 100;  // %
+let camZoom       = 100;  // % (100 = 1×)
+let camFlipped    = false;
+let camFullscreen = false;
+let camGrid       = false;
+let selectedDeviceId = null;
+
+/** Apply current brightness + contrast as CSS filter on the video. */
+function applyCamFilter() {
+  if (!el.camVideo) return;
+  el.camVideo.style.filter = `brightness(${camBrightness / 100}) contrast(${camContrast / 100})`;
+}
+
+/** Show/hide the camera controls panel and icon buttons when camera is on/off. */
+function setCamControlsVisible(visible) {
+  if (el.camControls)      el.camControls.hidden = !visible;
+  if (el.camFullscreenBtn) el.camFullscreenBtn.hidden = !visible;
+  if (el.camSnapBtn)       el.camSnapBtn.hidden = !visible;
+  if (el.camFlipBtn)       el.camFlipBtn.hidden = !visible;
+  if (el.camGridBtn)       el.camGridBtn.hidden = !visible;
+  if (el.camFpsBadge)      el.camFpsBadge.hidden = !visible;
+  if (el.camResTag)        el.camResTag.hidden = !visible;
+  if (!visible && el.camCalibBanner) el.camCalibBanner.hidden = true;
+}
+
+/** Toggle fullscreen mode on the mirror frame. */
+function toggleFullscreen() {
+  if (!el.mirrorFrame) return;
+  camFullscreen = !camFullscreen;
+  el.mirrorFrame.classList.toggle("is-fullscreen", camFullscreen);
+  if (el.camFullscreenBtn) {
+    el.camFullscreenBtn.classList.toggle("active", camFullscreen);
+    el.camFullscreenBtn.setAttribute("aria-label", camFullscreen ? "Exit fullscreen" : "Toggle fullscreen");
+    el.camFullscreenBtn.innerHTML = camFullscreen
+      ? `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+           <path d="M8 3v3a2 2 0 0 1-2 2H3"/><path d="M21 8h-3a2 2 0 0 1-2-2V3"/>
+           <path d="M3 16h3a2 2 0 0 1 2 2v3"/><path d="M16 21v-3a2 2 0 0 1 2-2h3"/>
+         </svg>`
+      : `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+           <path d="M8 3H5a2 2 0 0 0-2 2v3"/><path d="M21 8V5a2 2 0 0 0-2-2h-3"/>
+           <path d="M3 16v3a2 2 0 0 0 2 2h3"/><path d="M16 21h3a2 2 0 0 0 2-2v-3"/>
+         </svg>`;
+  }
+  if (camFullscreen) {
+    document.addEventListener("keydown", _escFullscreen);
+  } else {
+    document.removeEventListener("keydown", _escFullscreen);
+  }
+}
+function _escFullscreen(e) { if (e.key === "Escape" && camFullscreen) toggleFullscreen(); }
+
+/** Toggle natural vs mirrored orientation. */
+function toggleFlip() {
+  if (!el.mirrorFrame) return;
+  camFlipped = !camFlipped;
+  el.mirrorFrame.classList.toggle("flipped", camFlipped);
+  if (el.camFlipBtn) el.camFlipBtn.classList.toggle("active", camFlipped);
+  if (poseTracker) poseTracker.setFlipped(camFlipped);
+}
+
+/** Toggle rule-of-thirds framing grid overlay. */
+function toggleGrid() {
+  camGrid = !camGrid;
+  if (el.camGridBtn) el.camGridBtn.classList.toggle("active", camGrid);
+  if (poseTracker) poseTracker.setGrid(camGrid);
+}
+
+/** Reset brightness, contrast, zoom to defaults. */
+function resetAdjustments() {
+  camBrightness = 100;
+  camContrast = 100;
+  camZoom = 100;
+  if (el.camBrightness)    el.camBrightness.value = 100;
+  if (el.camContrast)      el.camContrast.value = 100;
+  if (el.camZoom)          el.camZoom.value = 100;
+  if (el.camBrightnessVal) el.camBrightnessVal.textContent = "100%";
+  if (el.camContrastVal)   el.camContrastVal.textContent = "100%";
+  if (el.camZoomVal)       el.camZoomVal.textContent = "1×";
+  applyCamFilter();
+  if (poseTracker) poseTracker.setZoom(1.0);
+}
+
+/** Enumerate connected video input devices and populate dropdown if >1. */
+async function loadCameraDevices() {
+  if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) return;
+  try {
+    const devices = await navigator.mediaDevices.enumerateDevices();
+    const videoDevices = devices.filter((d) => d.kind === "videoinput");
+    if (el.camDeviceSelect && el.camDeviceRow) {
+      if (videoDevices.length > 1) {
+        el.camDeviceSelect.innerHTML = videoDevices
+          .map((d, i) => `<option value="${d.deviceId}">${d.label || `Camera ${i + 1}`}</option>`)
+          .join("");
+        if (selectedDeviceId) el.camDeviceSelect.value = selectedDeviceId;
+        el.camDeviceRow.hidden = false;
+      } else {
+        el.camDeviceRow.hidden = true;
+      }
+    }
+  } catch (err) {
+    console.warn("[SpeakTwin] enumerateDevices", err);
+  }
+}
+
+/** Take a snapshot and trigger a PNG download. */
+function takeSnapshot() {
+  if (!poseTracker || !poseTracker.active) return;
+  const dataUrl = poseTracker.snapshot();
+  const a = document.createElement("a");
+  a.href = dataUrl;
+  a.download = `speaktwin-snapshot-${Date.now()}.png`;
+  a.click();
+  if (el.camSnapBtn) {
+    el.camSnapBtn.classList.add("snapping");
+    setTimeout(() => el.camSnapBtn && el.camSnapBtn.classList.remove("snapping"), 380);
+  }
+}
+
 if (el.camBtn) {
   el.camBtn.addEventListener("click", async () => {
     if (poseTracker && poseTracker.active) {
@@ -631,7 +777,15 @@ if (el.camBtn) {
       el.camBtn.setAttribute("aria-pressed", "false");
       el.mirror.classList.remove("on");
       el.mirrorCue.classList.remove("show");
-      el.camHint.textContent = "Camera off";
+      if (el.camHint) el.camHint.textContent = "Off";
+      setCamControlsVisible(false);
+      resetAdjustments();
+      camFlipped = false; camFullscreen = false; camGrid = false;
+      if (el.mirrorFrame)      el.mirrorFrame.classList.remove("flipped", "is-fullscreen");
+      if (el.camFlipBtn)       el.camFlipBtn.classList.remove("active");
+      if (el.camFullscreenBtn) el.camFullscreenBtn.classList.remove("active");
+      if (el.camGridBtn)       el.camGridBtn.classList.remove("active");
+      applyCamFilter();
       return;
     }
 
@@ -642,19 +796,39 @@ if (el.camBtn) {
         onBatch: sendPose,
         onStatus: (text) => { if (el.camHint) el.camHint.textContent = text; },
         onGuidance: showCue,
+        onFps: (fps) => {
+          if (el.camFpsBadge) el.camFpsBadge.textContent = `${fps} fps`;
+        },
+        onCalibration: ({ active, progress }) => {
+          if (el.camCalibBanner) {
+            el.camCalibBanner.hidden = !active;
+            if (active && el.camCalibText) {
+              el.camCalibText.textContent = `Calibrating baseline... ${progress}%`;
+            }
+          }
+        },
+        onResolution: (res) => {
+          if (el.camResTag) {
+            el.camResTag.textContent = res;
+            el.camResTag.hidden = false;
+          }
+        },
       });
     }
 
     try {
       el.camBtn.disabled = true;
-      await poseTracker.start();
+      await poseTracker.start(selectedDeviceId);
       el.camBtn.textContent = "Turn off camera";
       el.camBtn.setAttribute("aria-pressed", "true");
       el.mirror.classList.add("on");
-      el.camHint.textContent = "Watching";
+      if (el.camHint) el.camHint.textContent = "Watching";
+      setCamControlsVisible(true);
+      applyCamFilter();
+      loadCameraDevices();
     } catch (err) {
       console.error("[SpeakTwin] camera", err);
-      el.camHint.textContent = "Camera blocked";
+      if (el.camHint) el.camHint.textContent = "Blocked";
       el.postureNotes.innerHTML =
         `<p class="empty">Camera access is blocked. Allow it in your browser's ` +
         `site settings, then turn it on again.</p>`;
@@ -663,6 +837,71 @@ if (el.camBtn) {
     }
   });
 }
+
+// ── Camera control event listeners ───────────────────────────
+if (el.camBrightness) {
+  el.camBrightness.addEventListener("input", () => {
+    camBrightness = Number(el.camBrightness.value);
+    if (el.camBrightnessVal) el.camBrightnessVal.textContent = `${camBrightness}%`;
+    applyCamFilter();
+  });
+}
+if (el.camContrast) {
+  el.camContrast.addEventListener("input", () => {
+    camContrast = Number(el.camContrast.value);
+    if (el.camContrastVal) el.camContrastVal.textContent = `${camContrast}%`;
+    applyCamFilter();
+  });
+}
+if (el.camZoom) {
+  el.camZoom.addEventListener("input", () => {
+    camZoom = Number(el.camZoom.value);
+    const level = camZoom / 100;
+    if (el.camZoomVal) el.camZoomVal.textContent = `${level.toFixed(1)}×`;
+    if (poseTracker) poseTracker.setZoom(level);
+  });
+}
+if (el.camFlipBtn)       el.camFlipBtn.addEventListener("click", toggleFlip);
+if (el.camGridBtn)       el.camGridBtn.addEventListener("click", toggleGrid);
+if (el.camFullscreenBtn) el.camFullscreenBtn.addEventListener("click", toggleFullscreen);
+if (el.camSnapBtn)       el.camSnapBtn.addEventListener("click", takeSnapshot);
+if (el.camResetBtn)      el.camResetBtn.addEventListener("click", resetAdjustments);
+
+if (el.camDeviceSelect) {
+  el.camDeviceSelect.addEventListener("change", async () => {
+    selectedDeviceId = el.camDeviceSelect.value;
+    if (poseTracker && poseTracker.active) {
+      poseTracker.stop();
+      await poseTracker.start(selectedDeviceId);
+    }
+  });
+}
+
+// ── Global Keyboard Shortcuts ─────────────────────────────────
+document.addEventListener("keydown", (e) => {
+  if (
+    e.target.tagName === "INPUT" ||
+    e.target.tagName === "TEXTAREA" ||
+    e.target.tagName === "SELECT" ||
+    e.metaKey ||
+    e.ctrlKey ||
+    e.altKey
+  ) {
+    return;
+  }
+  const key = e.key.toLowerCase();
+  if (key === "c") {
+    if (el.camBtn) el.camBtn.click();
+  } else if (key === "f") {
+    if (poseTracker && poseTracker.active) toggleFullscreen();
+  } else if (key === "s") {
+    if (poseTracker && poseTracker.active) takeSnapshot();
+  } else if (key === "m") {
+    if (poseTracker && poseTracker.active) toggleFlip();
+  } else if (key === "g") {
+    if (poseTracker && poseTracker.active) toggleGrid();
+  }
+});
 
 /** The per-frame nudge. Distinct from the server's considered coaching. */
 function showCue(cue) {
@@ -704,6 +943,12 @@ function renderPosture(p) {
     el.postureNotes.hidden = false;
     el.postureNotes.innerHTML =
       `<p class="empty">${escapeHtml(p.message)}</p>`;
+    // Reset ring
+    if (el.postureRingFill) {
+      el.postureRingFill.style.strokeDashoffset = "113";
+      el.postureRingFill.className = "posture-ring-fill";
+    }
+    if (el.postureRing) el.postureRing.hidden = false;
     return;
   }
 
@@ -712,8 +957,17 @@ function renderPosture(p) {
   el.postureNum.className =
     "posture-num" + (p.score >= 75 ? " good" : p.score >= 50 ? "" : " poor");
 
-  // Only the dimensions the camera could actually see are shown; a
-  // speaker framed chest-up should not see a zeroed "steadiness".
+  // Animate the posture score ring
+  if (el.postureRingFill && p.score != null) {
+    const circumference = 113; // 2π × 18 ≈ 113
+    const offset = circumference - (clamp01(p.score / 100) * circumference);
+    el.postureRingFill.style.strokeDashoffset = String(Math.round(offset));
+    const ringClass = p.score >= 75 ? "good" : p.score >= 50 ? "" : "poor";
+    el.postureRingFill.className = `posture-ring-fill${ringClass ? " " + ringClass : ""}`;
+    el.postureRing.hidden = false;
+  }
+
+  // Only the dimensions the camera could actually see are shown.
   el.postureBars.innerHTML = (p.measured || [])
     .map((key) => {
       const v = p.breakdown[key] ?? 0;

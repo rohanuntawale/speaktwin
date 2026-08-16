@@ -31,21 +31,30 @@ def lm(x, y, z=0.0, v=1.0):
 
 
 def body(shoulder_dy=0.0, hip_dx=0.0, torso=0.25, wrist_x=0.36,
-         ear_z=0.0, visible=True):
+         ear_z=0.0, ear_dx=0.045, hand_at_mouth=False, visible=True):
     """
     A plausible upright speaker. `shoulder_dy` drops the right shoulder,
-    `hip_dx` shifts the hips sideways to create a lean.
+    `hip_dx` shifts the hips sideways to create a lean, `ear_dx` widens
+    the apparent head (larger = head nearer the camera), `hand_at_mouth`
+    raises the right hand to cover the mouth.
     """
     v = 1.0 if visible else 0.0
     points = [lm(0.50, 0.24, v=v)]                    # 0 nose
     points += [lm(0.50, 0.24, v=v) for _ in range(6)]  # 1-6 eyes
-    points += [lm(0.455, 0.235, ear_z, v), lm(0.545, 0.235, ear_z, v)]  # 7,8 ears
+    points += [lm(0.50 - ear_dx, 0.235, ear_z, v),
+               lm(0.50 + ear_dx, 0.235, ear_z, v)]     # 7,8 ears
     points += [lm(0.50, 0.28, v=v), lm(0.50, 0.28, v=v)]                # 9,10 mouth
     points += [lm(0.40, 0.40 - shoulder_dy, 0.0, v),
                lm(0.60, 0.40 + shoulder_dy, 0.0, v)]                    # 11,12 shoulders
     points += [lm(0.36, 0.55, v=v), lm(0.64, 0.55, v=v)]                # 13,14 elbows
-    points += [lm(wrist_x, 0.66, v=v), lm(1 - wrist_x, 0.66, v=v)]      # 15,16 wrists
-    points += [lm(0.50, 0.70, v=v) for _ in range(6)]                   # 17-22 hands
+    if hand_at_mouth:
+        points += [lm(wrist_x, 0.66, v=v), lm(0.52, 0.31, v=v)]         # 15,16 wrists
+        points += [lm(0.50, 0.70, v=v) for _ in range(3)]               # 17,18,19 (left)
+        points += [lm(0.50, 0.285, v=v)]                                # 20 R index on mouth
+        points += [lm(0.50, 0.70, v=v) for _ in range(2)]               # 21,22
+    else:
+        points += [lm(wrist_x, 0.66, v=v), lm(1 - wrist_x, 0.66, v=v)]  # 15,16 wrists
+        points += [lm(0.50, 0.70, v=v) for _ in range(6)]               # 17-22 hands
     points += [lm(0.44 + hip_dx, 0.40 + torso, 0.0, v),
                lm(0.56 + hip_dx, 0.40 + torso, 0.0, v)]                 # 23,24 hips
     points += [lm(0.50, 0.95, v=v) for _ in range(8)]                   # 25-32 legs
@@ -257,6 +266,160 @@ def test_only_measured_dimensions_are_scored():
     scored = score_posture(pose, {"detected": False})
     assert scored["measured"] == ["alignment"]
     assert "openness" not in scored["breakdown"]
+
+
+# ---------------------------------------------------------------------------
+# Forward head — self-calibrated, never absolute
+# ---------------------------------------------------------------------------
+def test_head_scale_is_measured_per_frame():
+    narrow = analyse_frame(PoseFrame(body(ear_dx=0.045), aspect=1.0))
+    wide = analyse_frame(PoseFrame(body(ear_dx=0.060), aspect=1.0))
+    assert wide["head_scale"] > narrow["head_scale"]
+
+
+def test_forward_head_is_unknown_without_a_baseline():
+    """
+    The old absolute z-depth threshold nagged correctly-seated people —
+    webcam perspective puts everyone's ears nearer the camera. With no
+    personal baseline the only honest band is "unknown".
+    """
+    pose = analyse_frames(frames(6))
+    pose.pop("frames", None)
+    assert interpret(pose)["forward_head"] == "unknown"
+
+
+def test_unknown_forward_head_is_excluded_from_the_score():
+    pose = analyse_frames(frames(6))
+    pose.pop("frames", None)
+    scored = score_posture(pose, {"detected": True, "sway": 0.0})
+    assert "head" not in scored["breakdown"]
+
+
+def test_session_baseline_flags_drift_not_absolutes():
+    from backend.services.session_store import SessionStore
+
+    store = SessionStore()
+    session = store.create()
+    try:
+        assert session.calibrate_head_scale(0.45) == 1.0   # first batch seeds
+        assert session.calibrate_head_scale(0.45) == pytest.approx(1.0, abs=0.01)
+        craned = session.calibrate_head_scale(0.58)         # head 29% closer
+        assert craned > 1.2
+        # Sitting back below the old neutral snaps the baseline down.
+        assert session.calibrate_head_scale(0.43) == pytest.approx(1.0, abs=0.01)
+    finally:
+        store.clear()
+
+
+def test_endpoint_chin_warning_needs_calibrated_drift(client):
+    session_id = client.post("/api/session").json()["session_id"]
+
+    def chin_msgs(response):
+        return [m for m in response["feedback"] if m["category"] == "neck"]
+
+    # Neutral batch seeds the baseline: no chin nagging on first sight.
+    first = client.post("/api/pose",
+                        json=pose_payload(session_id=session_id)).json()
+    assert not [m for m in chin_msgs(first) if m["type"] == "warning"]
+
+    # Same person, head 33% larger -> drift from their own neutral.
+    craned = client.post("/api/pose",
+                         json=pose_payload(session_id=session_id, ear_dx=0.060)).json()
+    assert craned["bands"]["forward_head"] == "pronounced"
+    assert any(m["type"] == "warning" for m in chin_msgs(craned))
+
+
+def test_endpoint_without_session_never_judges_the_chin(client):
+    response = client.post("/api/pose", json=pose_payload(ear_dx=0.060)).json()
+    assert response["bands"]["forward_head"] == "unknown"
+    assert not [m for m in response["feedback"] if m["category"] == "neck"]
+
+
+# ---------------------------------------------------------------------------
+# Chin false negative: starting the camera already craned
+# ---------------------------------------------------------------------------
+def test_baseline_ceiling_catches_a_craned_start():
+    """
+    Pure self-calibration learns whatever it sees first: start craned and
+    that pose becomes 'neutral', so it is never flagged. The anatomical
+    ceiling (ear span ≤ ~0.52 shoulder widths at true neutral) caps the
+    baseline, so an oversized head reads as leaning-in from frame one.
+    """
+    from backend.services.session_store import SessionStore
+
+    store = SessionStore()
+    session = store.create()
+    try:
+        # First thing the camera ever sees: head at 0.62 shoulder-widths.
+        deviation = session.calibrate_head_scale(0.62)
+        assert deviation is not None and deviation > 1.15
+        assert session.head_scale_base <= 0.52
+    finally:
+        store.clear()
+
+
+def test_normal_proportions_are_untouched_by_the_ceiling():
+    from backend.services.session_store import SessionStore
+
+    store = SessionStore()
+    session = store.create()
+    try:
+        assert session.calibrate_head_scale(0.45) == 1.0
+        assert session.head_scale_base == pytest.approx(0.45)
+    finally:
+        store.clear()
+
+
+def test_endpoint_flags_a_session_that_starts_craned(client):
+    session_id = client.post("/api/session").json()["session_id"]
+    response = client.post(
+        "/api/pose", json=pose_payload(session_id=session_id, ear_dx=0.065)
+    ).json()
+    # ear span 0.13 over shoulder width 0.2 → 0.65: flagged immediately,
+    # no sit-back required first.
+    assert response["bands"]["forward_head"] in ("noticeable", "pronounced")
+
+
+# ---------------------------------------------------------------------------
+# Hand at the face
+# ---------------------------------------------------------------------------
+def test_hand_face_distance_is_measured():
+    covered = analyse_frame(PoseFrame(body(hand_at_mouth=True), aspect=1.0))
+    free = analyse_frame(PoseFrame(body(), aspect=1.0))
+    assert covered["hand_face_dist"] < 0.30
+    assert free["hand_face_dist"] > 0.30
+
+
+def test_hand_on_face_ratio_reflects_persistence():
+    mixed = [PoseFrame(body(hand_at_mouth=(i < 4)), aspect=1.0) for i in range(10)]
+    summary = analyse_frames(mixed)
+    assert summary["hand_on_face_ratio"] == pytest.approx(0.4)
+
+
+def test_hand_on_face_bands():
+    covered = analyse_frames(frames(10, hand_at_mouth=True))
+    covered.pop("frames", None)
+    assert interpret(covered)["hand_on_face"] == "pronounced"
+
+    free = analyse_frames(frames(10))
+    free.pop("frames", None)
+    assert interpret(free)["hand_on_face"] == "good"
+
+
+def test_endpoint_warns_about_a_covered_mouth(client):
+    response = client.post(
+        "/api/pose", json=pose_payload(hand_at_mouth=True)
+    ).json()
+    hands = [m for m in response["feedback"]
+             if m["category"] == "hands" and m["type"] == "warning"]
+    assert hands, "a covered mouth must produce a warning"
+    assert "face" in hands[0]["text"].lower() or "hand" in hands[0]["text"].lower()
+
+
+def test_gesturing_hands_do_not_read_as_face_touching(client):
+    """Hands at chest height are gesturing space, not face cover."""
+    response = client.post("/api/pose", json=pose_payload()).json()
+    assert response["bands"]["hand_on_face"] == "good"
 
 
 # ---------------------------------------------------------------------------

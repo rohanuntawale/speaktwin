@@ -20,8 +20,7 @@ from __future__ import annotations
 from typing import Any, Dict, List, Optional
 
 from backend.utils.helpers import (  # type: ignore
-    FORWARD_HEAD_NOTICEABLE,
-    FORWARD_HEAD_PRONOUNCED,
+    HEAD_SCALE_FIX,
     HEAD_TILT_NOTICEABLE,
     HEAD_TILT_PRONOUNCED,
     OPENNESS_CLOSED,
@@ -80,7 +79,16 @@ def score_posture(pose: Dict[str, Any], movement: Dict[str, Any]) -> Dict[str, A
     measured_alignment = [p for p in alignment_parts if p is not None]
     alignment = sum(measured_alignment) / len(measured_alignment) if measured_alignment else None
 
-    head = _decay(pose.get("forward_head"), FORWARD_HEAD_NOTICEABLE, FORWARD_HEAD_PRONOUNCED * 1.5)
+    # Forward head: judged only against the speaker's calibrated baseline.
+    # No baseline (no session, or first batch) → dimension excluded, not
+    # zeroed — the absolute z-depth threshold this replaces nagged
+    # correctly-seated people because of webcam perspective bias.
+    deviation = pose.get("head_deviation")
+    if deviation is None:
+        head = None
+    else:
+        span = HEAD_SCALE_FIX - 1.0
+        head = _clamp01(1.0 - (deviation - 1.0) / span) if span > 0 else None
 
     openness_value = pose.get("openness")
     if openness_value is None:
@@ -158,6 +166,13 @@ def generate_posture_feedback(pose: Dict[str, Any], movement: Dict[str, Any],
             "warning", "neck")
     elif pose_bands.get("forward_head") == "noticeable":
         add("Head drifting toward the screen.", "info", "neck")
+
+    # ── Hand at the face ─────────────────────────────────────────────
+    if pose_bands.get("hand_on_face") == "pronounced":
+        add("Your hand is covering your face. Bring it down so your words carry.",
+            "warning", "hands")
+    elif pose_bands.get("hand_on_face") == "noticeable":
+        add("Hand keeps drifting to your face.", "warning", "hands")
 
     # ── Openness ─────────────────────────────────────────────────────
     if pose_bands.get("openness") == "pronounced":

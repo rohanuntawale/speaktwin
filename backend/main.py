@@ -38,7 +38,7 @@ from backend.utils.helpers import get_logger  # type: ignore
 logger = get_logger("speaktwin")
 settings = get_settings()
 
-APP_VERSION = "1.1.0"
+APP_VERSION = "1.2.0"
 
 
 # ---------------------------------------------------------------------------

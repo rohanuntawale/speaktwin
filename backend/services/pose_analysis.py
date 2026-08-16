@@ -21,9 +21,15 @@ import math
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from backend.utils.helpers import (  # type: ignore
-    FORWARD_HEAD_NOTICEABLE,
-    FORWARD_HEAD_PRONOUNCED,
+    HAND_FACE_RADIUS,
+    HAND_ON_FACE_NOTICEABLE,
+    HAND_ON_FACE_PRONOUNCED,
+    HEAD_SCALE_FIX,
+    HEAD_SCALE_WATCH,
     HEAD_TILT_NOTICEABLE,
+    POSE_HAND_POINTS,
+    POSE_MOUTH_LEFT,
+    POSE_MOUTH_RIGHT,
     HEAD_TILT_PRONOUNCED,
     OPENNESS_CLOSED,
     OPENNESS_OPEN,
@@ -160,6 +166,10 @@ def analyse_frame(frame: PoseFrame) -> Optional[Dict[str, Any]]:
     left_ear, right_ear = frame.point(POSE_LEFT_EAR), frame.point(POSE_RIGHT_EAR)
     if left_ear and right_ear:
         result["head_tilt"] = round(tilt_degrees(left_ear, right_ear), 2)
+        # Apparent head size. Craning at the screen moves only the head
+        # nearer the camera, so this ratio grows while shoulder width
+        # stays put — the forward-head signal, in reliable xy geometry.
+        result["head_scale"] = round(math.dist(left_ear, right_ear) / width, 4)
 
     # ── Head turned away from the audience ───────────────────────────
     nose = frame.point(POSE_NOSE)
@@ -206,6 +216,20 @@ def analyse_frame(frame: PoseFrame) -> Optional[Dict[str, Any]]:
                 in_box += 1
         result["hands_in_gesture_box"] = in_box
 
+    # ── Hand at the face ─────────────────────────────────────────────
+    # Nearest hand landmark to the mouth. Covering the mouth muffles
+    # speech and reads as nervous; gesturing at chest height sits far
+    # outside the radius, so plain distance separates the two cleanly.
+    mouth = frame.midpoint(POSE_MOUTH_LEFT, POSE_MOUTH_RIGHT)
+    if mouth is not None:
+        distances = []
+        for index in POSE_HAND_POINTS:
+            point = frame.point(index)
+            if point is not None:
+                distances.append(math.dist(point, mouth) / width)
+        if distances:
+            result["hand_face_dist"] = round(min(distances), 3)
+
     result["centre"] = [round(shoulder_mid[0], 4), round(shoulder_mid[1], 4)]
     result["wrists"] = [
         [round(w[0], 4), round(w[1], 4)] if w else None for w in wrists
@@ -237,6 +261,7 @@ def analyse_frames(frames: List[PoseFrame]) -> Dict[str, Any]:
         "total_frames": len(frames),
         "shoulder_tilt": mean("shoulder_tilt"),
         "head_tilt": mean("head_tilt"),
+        "head_scale": mean("head_scale"),
         "head_offset": mean("head_offset"),
         "torso_lean": mean("torso_lean"),
         "openness": mean("openness"),
@@ -244,6 +269,16 @@ def analyse_frames(frames: List[PoseFrame]) -> Dict[str, Any]:
         "hands_visible": mean("hands_visible"),
         "hands_in_gesture_box": mean("hands_in_gesture_box"),
     }
+
+    # Fraction of frames with a hand at the face — a ratio rather than a
+    # mean distance, because "touched face briefly" and "hovering hand"
+    # average out the same while meaning very different things.
+    face_touches = [
+        m for m in usable
+        if m.get("hand_face_dist") is not None
+        and m["hand_face_dist"] < HAND_FACE_RADIUS
+    ]
+    summary["hand_on_face_ratio"] = round(len(face_touches) / len(usable), 3)
     summary["frames"] = usable  # gesture analysis needs the time series
     return summary
 
@@ -274,9 +309,32 @@ def interpret(summary: Dict[str, Any]) -> Dict[str, str]:
                            HEAD_TILT_NOTICEABLE, HEAD_TILT_PRONOUNCED),
         "torso_lean": _band(summary.get("torso_lean"),
                             TORSO_LEAN_NOTICEABLE, TORSO_LEAN_PRONOUNCED),
-        "forward_head": _band(summary.get("forward_head"),
-                              FORWARD_HEAD_NOTICEABLE, FORWARD_HEAD_PRONOUNCED),
     }
+
+    # Forward head is judged only against the speaker's own calibrated
+    # baseline (`head_deviation`, injected by the route from session
+    # state). Without a baseline the honest answer is "unknown" — the
+    # old absolute z-depth threshold nagged correctly-seated people
+    # because webcam geometry biases everyone's ears toward the camera.
+    deviation = summary.get("head_deviation")
+    if deviation is None:
+        bands["forward_head"] = "unknown"
+    elif deviation >= HEAD_SCALE_FIX:
+        bands["forward_head"] = "pronounced"
+    elif deviation >= HEAD_SCALE_WATCH:
+        bands["forward_head"] = "noticeable"
+    else:
+        bands["forward_head"] = "good"
+
+    touch_ratio = summary.get("hand_on_face_ratio")
+    if touch_ratio is None:
+        bands["hand_on_face"] = "unknown"
+    elif touch_ratio >= HAND_ON_FACE_PRONOUNCED:
+        bands["hand_on_face"] = "pronounced"
+    elif touch_ratio >= HAND_ON_FACE_NOTICEABLE:
+        bands["hand_on_face"] = "noticeable"
+    else:
+        bands["hand_on_face"] = "good"
 
     openness = summary.get("openness")
     if openness is None:

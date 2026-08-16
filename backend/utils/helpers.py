@@ -195,7 +195,43 @@ TORSO_LEAN_NOTICEABLE = 7.0
 TORSO_LEAN_PRONOUNCED = 14.0
 
 # Head carried forward of the shoulders — the "screen reading" posture.
-# Normalised by shoulder width so it survives distance from the camera.
+#
+# Detected from apparent head size: craning toward the screen brings only
+# the head nearer the camera, so ear-to-ear distance grows RELATIVE to
+# shoulder width. Pure xy geometry, where MediaPipe is accurate — unlike
+# its z-depth, which is monocular guesswork with a systematic bias (a
+# webcam below eye level puts everyone's ears "nearer" than their
+# shoulders, so absolute depth thresholds nag correctly-seated people).
+#
+# Judged against the speaker's own session baseline, never an absolute:
+# bodies, chairs, and camera geometry all differ.
+HEAD_SCALE_WATCH = 1.10    # head 10% larger than your neutral → noticeable
+HEAD_SCALE_FIX = 1.20      # 20% larger → pronounced
+HEAD_BASELINE_CREEP = 1.003  # per-batch relaxation so a stale best decays
+# Anatomical ceiling on the baseline. Ear-to-ear span runs ~0.33-0.47 of
+# shoulder width at neutral for real human proportions, so a baseline
+# above this can only mean the speaker was ALREADY leaning in when the
+# camera first saw them. Without the ceiling, pure self-calibration
+# enshrines that craned pose as "neutral" and can never flag it — the
+# false-negative twin of the absolute-threshold false positive.
+HEAD_SCALE_CEILING = 0.52
+
+# Hand over the mouth / face — muffles speech and reads as nervous.
+# Distance from the nearest hand landmark to the mouth, in shoulder-widths
+# (fingertips on the mouth measure ~0-0.15; hands gesturing at chest ~0.8+).
+HAND_FACE_RADIUS = 0.30
+# Fraction of a batch's frames with a hand at the face before it is called.
+HAND_ON_FACE_NOTICEABLE = 0.30
+HAND_ON_FACE_PRONOUNCED = 0.60
+
+POSE_MOUTH_LEFT = 9
+POSE_MOUTH_RIGHT = 10
+# Wrists plus pinky/index/thumb points — everything MediaPipe gives us
+# below the wrist.
+POSE_HAND_POINTS = (15, 16, 17, 18, 19, 20, 21, 22)
+
+# Legacy z-depth ratio, still *reported* for data purposes but no longer
+# used to judge posture (see above for why).
 FORWARD_HEAD_NOTICEABLE = 0.18
 FORWARD_HEAD_PRONOUNCED = 0.32
 

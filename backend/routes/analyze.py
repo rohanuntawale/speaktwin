@@ -364,14 +364,19 @@ def _score_pose_batch(batch: PoseBatchRequest) -> Dict[str, Any]:
     series = pose.pop("frames", [])
     movement = analyse_movement(series, batch.duration)
 
+    # Forward head needs the speaker's own baseline: apparent head size is
+    # meaningless as an absolute (bodies and camera distances differ), so
+    # the session carries the neutral and this batch is judged as drift.
+    session = session_store.get(batch.session_id)
+    if session is not None and pose.get("detected"):
+        pose["head_deviation"] = session.calibrate_head_scale(pose.get("head_scale"))
+
     pose_bands = interpret_pose(pose)
     movement_bands = interpret_movement(movement)
 
     scored = score_posture(pose, movement)
     messages = generate_posture_feedback(pose, movement, pose_bands, movement_bands)
     status = posture_status(scored["score"], messages)
-
-    session = session_store.get(batch.session_id)
     presence = None
     if session is not None:
         session.record_posture(scored["score"], movement, messages,

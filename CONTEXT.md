@@ -236,6 +236,8 @@ Each has a regression test.
 | Canvas measured once at construction | Box is still 0 while fonts load. Now a `ResizeObserver` |
 | Grid/flex children at `min-width:auto` | Refused to shrink, so narrow viewports scrolled sideways |
 | STT on fixed 2.5 s slices | Whisper trained on 30 s windows; slices cut mid-word and stripped context. Now cut on natural pauses |
+| Chin check missed a craned start | Pure self-calibration learns whatever it sees first — start leaning in and that pose becomes "neutral". Fixed with an anatomical ceiling: ear span ≤ 0.52 shoulder-widths at true neutral, so an oversized head reads as leaning-in from frame one |
+| Chin check nagged correct posture | Absolute thresholds on MediaPipe z-depth — monocular guesswork plus webcam-below-eye perspective puts everyone's ears "nearer" than shoulders. Replaced with head-size-vs-shoulder-width (reliable xy), judged against the speaker's own session baseline; band is "unknown" until calibrated |
 | Score climbed into the mic at small widths | Percent positioning + fixed-px type: the instrument shrank, the "84" didn't. Now the score's centre is pinned to the mic-to-ring band (26.25% + translateY) and its type scales in cqi units with the instrument |
 | Mirror overlapped the breakdown rail | `.stage` caps at 1160px, so the mirror's side track was ~140px and its 160px min-width overflowed leftward into the rail at every viewport. Fixed: the rig breaks out of the stage cap (`min(1380px, …)`, centred), mirror `width: min(210px, 100%)` can never exceed its track, stacks below 1280px |
 | `tiny.en` + `beam_size=1`, no decode guards | Mangled ordinary speech. Now `base.en`, beam 5, temperature fallback + no-speech/logprob/compression guards |

@@ -253,11 +253,11 @@ main { position: relative; z-index: 1; padding: 0 var(--gut) 40px; }
    than as two unrelated columns marooned at the page edges. */
 .console {
   display: grid;
-  grid-template-columns: minmax(0, 200px) auto minmax(0, 200px);
+  grid-template-columns: minmax(0, 170px) auto minmax(0, 170px);
   justify-content: center;
   align-items: center;
-  gap: clamp(18px, 3.4vw, 46px);
-  max-width: 860px;
+  gap: clamp(16px, 2.6vw, 38px);
+  max-width: 760px;
   margin: 0 auto;
 }
 
@@ -342,7 +342,7 @@ main { position: relative; z-index: 1; padding: 0 var(--gut) 40px; }
 /* ───────────────── The voiceprint ───────────────── */
 .voiceprint {
   position: relative;
-  width: clamp(230px, 34vw, 330px);
+  width: clamp(210px, 26vw, 280px);
   aspect-ratio: 1;
   display: grid;
   place-items: center;
@@ -736,10 +736,6 @@ mark.fill { color: var(--rose); background: rgba(255, 95, 126, 0.11); }
   grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   align-items: start;
   gap: clamp(14px, 2vw, 30px);
-  /* The stage caps at 1160px, and the console alone is ~820px — inside
-     that cap a side column is ~140px, which no usable mirror fits. So
-     the rig alone breaks out of the cap, centred on the page, leaving
-     the rest of the stage's rhythm untouched. */
   width: min(1380px, 100vw - 2 * clamp(20px, 4vw, 56px));
   position: relative;
   left: 50%;
@@ -747,25 +743,116 @@ mark.fill { color: var(--rose); background: rgba(255, 95, 126, 0.11); }
 }
 
 .rig-spacer { min-width: 0; }
-
 .rig > .console { grid-column: 2; }
 
 .mirror {
   grid-column: 3;
   justify-self: end;
   align-self: start;
-  /* Aligns the frame's top with the instrument, keeping it high in the
-     eyeline while speaking. */
   margin-top: clamp(0px, 2.5vh, 22px);
-  /* Never wider than the track: overflowing it is exactly the overlap
-     bug this layout exists to prevent. The track floor at the 1280px
-     breakpoint keeps this ≥ ~145px. */
-  width: min(210px, 100%);
+  width: min(300px, 100%);
   display: grid;
-  gap: 8px;
-  justify-items: center;
+  gap: 6px;
+  justify-items: stretch;
 }
 
+/* ── Mirror header ── */
+.mirror-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 2px;
+}
+
+.mirror-title-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.mirror-label {
+  font-family: var(--data);
+  font-size: 9px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
+/* Animated recording indicator dot */
+.cam-rec-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: transparent;
+  transition: background 0.3s ease, box-shadow 0.3s ease;
+  flex-shrink: 0;
+}
+.mirror.on .cam-rec-dot {
+  background: var(--rose);
+  box-shadow: 0 0 7px var(--rose);
+  animation: rec-pulse 1.8s ease-in-out infinite;
+}
+@keyframes rec-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+
+.cam-state {
+  font-family: var(--data);
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--faint);
+  transition: color 0.4s ease;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mirror.on .cam-state { color: var(--ember-hi); }
+
+/* Action icon buttons row */
+.mirror-actions {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  flex-shrink: 0;
+}
+
+.cam-icon-btn {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--faint);
+  cursor: pointer;
+  transition: border-color 0.2s ease, color 0.2s ease, background 0.2s ease, transform 0.15s ease;
+  padding: 0;
+}
+.cam-icon-btn svg { width: 13px; height: 13px; }
+.cam-icon-btn:hover {
+  border-color: rgba(255, 255, 255, 0.22);
+  color: var(--bone);
+  background: rgba(255, 255, 255, 0.06);
+}
+.cam-icon-btn:active { transform: scale(0.9); }
+.cam-icon-btn.active {
+  border-color: var(--line-warm);
+  color: var(--ember-hi);
+  background: rgba(255, 143, 77, 0.1);
+}
+/* Snap flash feedback */
+.cam-icon-btn.snapping { animation: snap-flash 0.35s ease; }
+@keyframes snap-flash {
+  0%   { background: rgba(255, 255, 255, 0.55); color: #06070e; border-color: transparent; }
+  100% { background: rgba(255, 255, 255, 0.03); color: var(--faint); }
+}
+
+/* ── Mirror frame ── */
 .mirror-frame {
   position: relative;
   width: 100%;
@@ -780,8 +867,8 @@ mark.fill { color: var(--rose); background: rgba(255, 95, 126, 0.11); }
 }
 
 .mirror.on .mirror-frame {
-  border-color: var(--line-warm);
-  box-shadow: 0 0 24px rgba(255, 143, 77, 0.14);
+  border-color: rgba(255, 143, 77, 0.35);
+  box-shadow: 0 0 28px rgba(255, 143, 77, 0.16), 0 0 0 1px rgba(255, 143, 77, 0.08);
 }
 
 .mirror-frame video,
@@ -795,84 +882,323 @@ mark.fill { color: var(--rose); background: rgba(255, 95, 126, 0.11); }
   transition: opacity 0.5s ease;
 }
 
-/* Mirrored, because people expect to see themselves as in a mirror —
-   which is also this product's whole premise. */
+/* Mirrored, because people expect to see themselves as in a mirror. */
 .mirror-frame video { transform: scaleX(-1); }
+/* When flipped class is on, un-mirror the video (natural orientation). */
+.mirror-frame.flipped video { transform: scaleX(1); }
 
-.mirror.on video { opacity: 0.5; }
+.mirror.on video { opacity: 0.6; }
 .mirror.on canvas { opacity: 1; }
+
+/* Fullscreen mode */
+.mirror-frame.is-fullscreen {
+  position: fixed;
+  inset: 0;
+  z-index: 999;
+  width: 100vw;
+  height: 100vh;
+  aspect-ratio: unset;
+  border-radius: 0;
+  border: none;
+  background: #000;
+}
+.mirror-frame.is-fullscreen video,
+.mirror-frame.is-fullscreen canvas {
+  object-fit: contain;
+}
 
 .mirror-off {
   display: grid;
   justify-items: center;
-  gap: 5px;
+  gap: 6px;
   color: var(--ghost);
   font-size: 10px;
   letter-spacing: 0.04em;
+  transition: opacity 0.4s ease;
 }
-
-.mirror-off svg { width: 20px; height: 20px; }
+.mirror-off svg { width: 22px; height: 22px; opacity: 0.6; }
 .mirror.on .mirror-off { display: none; }
 
-/* Live cue — the per-frame nudge, distinct from the considered
-   coaching that arrives from the server every 2.5 s. */
+/* Live cue pill */
 .mirror-cue {
   position: absolute;
-  left: 6px;
-  right: 6px;
-  bottom: 6px;
+  left: 8px;
+  right: 8px;
+  bottom: 8px;
   z-index: 2;
-  padding: 5px 8px;
-  border-radius: 7px;
+  padding: 6px 10px;
+  border-radius: 20px;
   font-size: 10.5px;
-  font-weight: 500;
+  font-weight: 600;
   line-height: 1.3;
   text-align: center;
-  background: rgba(6, 7, 14, 0.78);
-  backdrop-filter: blur(8px);
+  background: rgba(6, 7, 14, 0.82);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255,255,255,0.08);
   color: var(--ice);
   opacity: 0;
-  transform: translateY(4px);
-  transition: opacity 0.3s ease, transform 0.3s ease, color 0.3s ease;
+  transform: translateY(6px) scale(0.97);
+  transition: opacity 0.28s ease, transform 0.28s cubic-bezier(0.2, 1.4, 0.4, 1),
+              color 0.28s ease, border-color 0.28s ease;
+  letter-spacing: 0.01em;
+}
+.mirror-cue.show  { opacity: 1; transform: none; }
+.mirror-cue.good  { color: var(--mint);  border-color: rgba(74, 222, 159, 0.2); }
+.mirror-cue.watch { color: var(--amber); border-color: rgba(255, 194, 71, 0.2); }
+.mirror-cue.fix   { color: var(--rose);  border-color: rgba(255, 95, 126, 0.25); }
+
+.cam-res-tag {
+  font-family: var(--data);
+  font-size: 8px;
+  letter-spacing: 0.08em;
+  padding: 1px 4px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--dim);
 }
 
-.mirror-cue.show { opacity: 1; transform: none; }
-.mirror-cue.good  { color: var(--mint); }
-.mirror-cue.watch { color: var(--amber); }
-.mirror-cue.fix   { color: var(--rose); }
-
-.cam-state {
+/* Calibration Banner overlay */
+.cam-calib-banner {
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 12px;
+  border-radius: 999px;
+  background: rgba(6, 7, 14, 0.88);
+  border: 1px solid rgba(127, 212, 255, 0.3);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
   font-family: var(--data);
   font-size: 9.5px;
+  letter-spacing: 0.04em;
+  color: var(--ice);
+  backdrop-filter: blur(8px);
+  animation: pop 0.3s cubic-bezier(0.2, 1.4, 0.4, 1) backwards;
+  pointer-events: none;
+}
+
+.calib-spinner {
+  width: 9px;
+  height: 9px;
+  border: 1.5px solid rgba(127, 212, 255, 0.3);
+  border-top-color: var(--ice);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* FPS badge */
+.cam-fps-badge {
+  position: absolute;
+  top: 7px;
+  right: 8px;
+  z-index: 3;
+  font-family: var(--data);
+  font-size: 9px;
+  letter-spacing: 0.06em;
+  color: rgba(255,255,255,0.45);
+  background: rgba(0,0,0,0.4);
+  padding: 2px 5px;
+  border-radius: 4px;
+  backdrop-filter: blur(4px);
+  pointer-events: none;
+}
+
+/* ── Camera controls ── */
+.cam-controls {
+  display: grid;
+  gap: 8px;
+  padding: 11px 12px 9px;
+  background: rgba(255,255,255,0.022);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  animation: rise 0.35s ease backwards;
+}
+
+.cam-ctrl-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 8px;
+}
+
+.cam-device-row {
+  grid-template-columns: auto 1fr;
+  padding-bottom: 4px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.cam-select {
+  font-family: var(--data);
+  font-size: 9.5px;
+  background: #0d101b;
+  color: var(--bone);
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  padding: 4px 6px;
+  outline: none;
+  cursor: pointer;
+  max-width: 100%;
+}
+.cam-select:focus {
+  border-color: var(--live);
+}
+
+.cam-ctrl-label {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-family: var(--data);
+  font-size: 9px;
   letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--faint);
+  white-space: nowrap;
+  cursor: default;
+  user-select: none;
+  min-width: 74px;
+}
+.cam-ctrl-label svg { flex-shrink: 0; color: var(--faint); }
+
+.cam-ctrl-val {
+  font-family: var(--data);
+  font-size: 9px;
+  color: var(--dim);
+  min-width: 28px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
 }
 
-/* ───────────────── Camera / posture ───────────────── */
+/* Slider track */
+.cam-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 3px;
+  border-radius: 2px;
+  background: rgba(255,255,255,0.1);
+  outline: none;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+.cam-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--ice);
+  border: 2px solid var(--panel);
+  box-shadow: 0 0 6px rgba(127, 212, 255, 0.5);
+  cursor: grab;
+  transition: transform 0.15s ease, background 0.2s ease;
+}
+.cam-slider::-webkit-slider-thumb:active { cursor: grabbing; transform: scale(1.25); }
+.cam-slider::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--ice);
+  border: 2px solid var(--panel);
+  box-shadow: 0 0 6px rgba(127, 212, 255, 0.5);
+  cursor: grab;
+}
+.mirror.on .cam-slider::-webkit-slider-thumb { background: var(--ember); box-shadow: 0 0 6px rgba(255, 143, 77, 0.5); }
+.mirror.on .cam-slider::-moz-range-thumb { background: var(--ember); }
+
+/* Control footer with reset and shortcuts */
+.cam-ctrl-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding-top: 4px;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+  margin-top: 2px;
+}
+
+.cam-reset-btn {
+  font-family: var(--data);
+  font-size: 8.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--faint);
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  padding: 3px 6px;
+  cursor: pointer;
+  transition: color 0.2s, border-color 0.2s;
+}
+.cam-reset-btn:hover {
+  color: var(--bone);
+  border-color: var(--line);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.cam-shortcuts-hint {
+  font-family: var(--data);
+  font-size: 8px;
+  letter-spacing: 0.04em;
+  color: var(--ghost);
+}
+
+/* ── Camera on/off button ── */
 .cam-btn {
   font-family: var(--data);
   font-size: 9.5px;
   letter-spacing: 0.1em;
   text-transform: uppercase;
-  padding: 5px 11px;
-  border-radius: 6px;
+  padding: 8px 14px;
+  border-radius: 8px;
   border: 1px solid var(--line);
   background: rgba(255, 255, 255, 0.03);
   color: var(--dim);
   cursor: pointer;
   transition: border-color 0.3s ease, color 0.3s ease, background 0.3s ease;
+  justify-self: center;
 }
-
 .cam-btn:hover { border-color: rgba(255, 255, 255, 0.22); color: var(--bone); }
-
 .cam-btn[aria-pressed="true"] {
   border-color: var(--line-warm);
   color: var(--ember-hi);
   background: rgba(255, 143, 77, 0.08);
 }
-
 .cam-btn:disabled { opacity: 0.5; cursor: wait; }
+
+.posture-header-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Posture score ring (SVG) */
+.posture-ring {
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  transform: rotate(-90deg);
+}
+.posture-ring-bg {
+  fill: none;
+  stroke: rgba(255,255,255,0.07);
+  stroke-width: 3;
+}
+.posture-ring-fill {
+  fill: none;
+  stroke: var(--ice);
+  stroke-width: 3;
+  stroke-linecap: round;
+  transition: stroke-dashoffset 0.7s cubic-bezier(0.3, 1, 0.4, 1), stroke 0.5s ease;
+}
+.posture-ring-fill.good { stroke: var(--mint); }
+.posture-ring-fill.poor { stroke: var(--rose); }
 
 .posture-read {
   display: grid;
@@ -895,7 +1221,6 @@ mark.fill { color: var(--rose); background: rgba(255, 95, 126, 0.11); }
   color: var(--ice);
   transition: color 0.5s ease;
 }
-
 .posture-num.good { color: var(--mint); }
 .posture-num.poor { color: var(--rose); }
 
@@ -915,7 +1240,6 @@ mark.fill { color: var(--rose); background: rgba(255, 95, 126, 0.11); }
   font-size: 10.5px;
   color: var(--faint);
 }
-
 .pbar > i {
   display: block;
   height: 4px;
@@ -923,16 +1247,14 @@ mark.fill { color: var(--rose); background: rgba(255, 95, 126, 0.11); }
   background: rgba(255, 255, 255, 0.09);
   overflow: hidden;
 }
-
 .pbar > i > b {
   display: block;
   height: 100%;
   width: 0;
   border-radius: 2px;
   background: var(--ice);
-  transition: width 0.5s cubic-bezier(0.3, 1, 0.4, 1), background 0.4s ease;
+  transition: width 0.6s cubic-bezier(0.3, 1, 0.4, 1), background 0.4s ease;
 }
-
 .pbar > i > b.good { background: var(--mint); }
 .pbar > i > b.poor { background: var(--rose); }
 
@@ -964,14 +1286,14 @@ mark.fill { color: var(--rose); background: rgba(255, 95, 126, 0.11); }
 /* The console (rails + instrument) measures ~800px, so a real side
    column for the mirror only exists above ~1280px. Below that, stack —
    squeezing it beside just recreates the collision. */
-@media (max-width: 1280px) {
+@media (max-width: 1360px) {
   .rig { grid-template-columns: 1fr; }
   .rig-spacer { display: none; }
   .rig > .console { grid-column: 1; }
   .mirror {
     grid-column: 1;
     justify-self: center;
-    width: min(260px, 70vw);
+    width: min(340px, 80vw);
     margin: 22px 0 0;
   }
 }
