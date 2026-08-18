@@ -642,6 +642,7 @@ setLive(false);
 
 // ── Camera / posture ─────────────────────────────────────────
 let poseTracker = null;
+let personalPosture = { score: 85, confidence: 0.85, samples: 0, prior: 0.85 };
 
 // ── Camera video filter & adjustment state ───────────────────
 let camBrightness = 100;  // %
@@ -760,6 +761,9 @@ if (el.camBtn) {
             el.camResTag.textContent = res;
             el.camResTag.hidden = false;
           }
+        },
+        onPersonalization: (state) => {
+          personalPosture = state || personalPosture;
         },
       });
     }
@@ -883,16 +887,22 @@ function renderPosture(p) {
   }
 
   el.postureRead.hidden = false;
-  el.postureNum.textContent = p.score == null ? "—" : p.score;
+  // Base server score remains authoritative; personalization applies only a
+  // bounded correction learned from the user's own stable sessions.
+  const adjustment = personalPosture
+    ? Math.max(-10, Math.min(10, (personalPosture.score || 85) - 85))
+    : 0;
+  const displayedScore = p.score == null ? null : Math.max(0, Math.min(100, Math.round(p.score + adjustment)));
+  el.postureNum.textContent = displayedScore == null ? "—" : displayedScore;
   el.postureNum.className =
-    "posture-num" + (p.score >= 75 ? " good" : p.score >= 50 ? "" : " poor");
+    "posture-num" + (displayedScore >= 75 ? " good" : displayedScore >= 50 ? "" : " poor");
 
   // Animate the posture score ring
-  if (el.postureRingFill && p.score != null) {
+  if (el.postureRingFill && displayedScore != null) {
     const circumference = 113; // 2π × 18 ≈ 113
-    const offset = circumference - (clamp01(p.score / 100) * circumference);
+    const offset = circumference - (clamp01(displayedScore / 100) * circumference);
     el.postureRingFill.style.strokeDashoffset = String(Math.round(offset));
-    const ringClass = p.score >= 75 ? "good" : p.score >= 50 ? "" : "poor";
+    const ringClass = displayedScore >= 75 ? "good" : displayedScore >= 50 ? "" : "poor";
     el.postureRingFill.className = `posture-ring-fill${ringClass ? " " + ringClass : ""}`;
     el.postureRing.hidden = false;
   }

@@ -123,7 +123,7 @@ function band(value, [watch, fix]) {
 }
 
 class PoseTracker {
-  constructor({ video, canvas, onBatch, onStatus, onGuidance, onFps, onCalibration, onResolution }) {
+  constructor({ video, canvas, onBatch, onStatus, onGuidance, onFps, onCalibration, onResolution, onPersonalization }) {
     this.video = video;
     this.canvas = canvas;
     this.ctx = canvas.getContext("2d");
@@ -133,6 +133,7 @@ class PoseTracker {
     this.onFps = onFps || (() => {});
     this.onCalibration = onCalibration || (() => {});
     this.onResolution = onResolution || (() => {});
+    this.onPersonalization = onPersonalization || (() => {});
 
     this.cue = null;        // currently displayed guidance
     this.cueSince = 0;      // when it was raised
@@ -148,6 +149,21 @@ class PoseTracker {
     this.clearFrames = 0;   // consecutive frames with nothing wrong
     this.calibrationScales = [];
     this.calibrationHeads = [];
+
+    // Personalization is an adjustment layer over the trained/base model.
+    // It starts with a calibrated 85% prior and learns slowly from sustained
+    // evidence, never replacing the base model or allowing a large jump.
+    this.personalScore = 85;
+    this.personalSamples = 0;
+    this.personalLoaded = false;
+    try {
+      const saved = JSON.parse(localStorage.getItem("speaktwin_personal_posture_v1") || "null");
+      if (saved && Number.isFinite(saved.score) && Number.isFinite(saved.samples)) {
+        this.personalScore = Math.max(75, Math.min(95, saved.score));
+        this.personalSamples = Math.max(0, Math.floor(saved.samples));
+        this.personalLoaded = true;
+      }
+    } catch (_) { /* private browsing/storage restrictions are harmless */ }
 
     this.landmarker = null;
     this.stream = null;
@@ -274,6 +290,9 @@ class PoseTracker {
     this.clearFrames = 0;
     this.calibrationScales = [];
     this.calibrationHeads = [];
+    this.personalScore = this.personalLoaded ? this.personalScore : 85;
+    this.personalSamples = this.personalLoaded ? this.personalSamples : 0;
+    this.onPersonalization({ score: Math.round(this.personalScore), confidence: 0.85, samples: this.personalSamples, prior: 0.85 });
     this._fpsFrames = 0;
     this._fpsLast = 0;
     this._fpsValue = 0;
@@ -517,6 +536,7 @@ class PoseTracker {
     // Never coach during calibration. The first second is for learning the
     // speaker's neutral camera geometry, not for judging it.
     if (this.baseAge < 60) {
+      this._learnPersonal(null, false);
       this.onCalibration({ active: true, progress: Math.min(100, Math.round((this.baseAge / 60) * 100)) });
       this._raise(null, "idle", now);
       return;
@@ -525,6 +545,8 @@ class PoseTracker {
     const worst = checks
       .filter((c) => c.band !== "good")
       .sort((a, b) => b.severity - a.severity)[0];
+
+    this._learnPersonal(worst, this.baseAge >= 60);
 
     if (worst) {
       this.clearFrames = 0;
@@ -544,6 +566,46 @@ class PoseTracker {
     if (this.clearFrames >= GOOD_HOLD_FRAMES) {
       this._raise("Good posture", "good", now);
     }
+  }
+
+  /**
+   * Slow, bounded online personalization. This is intentionally a prior and
+   * adjustment layer, not self-training from every noisy frame.
+   */
+  _learnPersonal(worst, calibrated) {
+    if (!calibrated) {
+      this.onPersonalization({ score: Math.round(this.personalScore), confidence: 0.85, samples: this.personalSamples, prior: 0.85 });
+      return;
+    }
+    const observed = !worst ? 97 : worst.band === "fix" ? 70 : 82;
+    // Only learn after the same state has held long enough to pass the
+    // existing temporal gates; this prevents jitter becoming a label.
+    const stable = !worst ? this.clearFrames >= 15 : (
+      worst.text.includes("chin") ? this.fwdFrames >= DROP_HOLD_FRAMES :
+      worst.text.includes("sunk") ? this.lowFrames >= DROP_HOLD_FRAMES :
+      this.faceFrames >= 12 || this.clearFrames === 0
+    );
+    if (!stable) return;
+
+    const alpha = this.personalSamples < 20 ? 0.04 : 0.015;
+    this.personalScore += alpha * (observed - this.personalScore);
+    this.personalScore = Math.max(75, Math.min(95, this.personalScore));
+    this.personalSamples += 1;
+    if (this.personalSamples % 10 === 0) {
+      try {
+        localStorage.setItem("speaktwin_personal_posture_v1", JSON.stringify({
+          score: this.personalScore,
+          samples: this.personalSamples,
+          updatedAt: Date.now(),
+        }));
+      } catch (_) { /* local storage is optional */ }
+    }
+    this.onPersonalization({
+      score: Math.round(this.personalScore),
+      confidence: Math.min(0.98, 0.85 + this.personalSamples * 0.005),
+      samples: this.personalSamples,
+      prior: 0.85,
+    });
   }
 
   /**
