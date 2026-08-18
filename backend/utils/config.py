@@ -324,7 +324,9 @@ def get_settings() -> Settings:
         llm_timeout_seconds=_float("LLM_TIMEOUT_SECONDS", 4.0, minimum=0.5, maximum=60.0),
         llm_min_interval_seconds=_float("LLM_MIN_INTERVAL_SECONDS", 8.0, minimum=0.0),
         llm_max_transcript_chars=_int("LLM_MAX_TRANSCRIPT_CHARS", 1200, minimum=100),
-        _llm_enabled=_bool("LLM_ENABLED", True),
+        # Rule-based coaching plus the local speech/confidence models are the
+        # production default. An external LLM must be explicitly opted in.
+        _llm_enabled=_bool("LLM_ENABLED", False),
 
         # Sessions
         session_ttl_seconds=_int("SESSION_TTL_SECONDS", 3600, minimum=60),
