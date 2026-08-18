@@ -1,16 +1,11 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "buildCommand": null,
-  "outputDirectory": "frontend",
-  "framework": null,
-
   "rewrites": [
     {
       "source": "/api/:path*",
       "destination": "https://speaktwin-api.onrender.com/api/:path*"
     }
   ],
-
   "headers": [
     {
       "source": "/(.*)",
@@ -18,16 +13,7 @@
         { "key": "X-Content-Type-Options", "value": "nosniff" },
         { "key": "X-Frame-Options", "value": "SAMEORIGIN" },
         { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" },
-        {
-          "key": "Permissions-Policy",
-          "value": "microphone=(self), camera=(), geolocation=()"
-        }
-      ]
-    },
-    {
-      "source": "/(.*).(css|js)",
-      "headers": [
-        { "key": "Cache-Control", "value": "public, max-age=0, must-revalidate" }
+        { "key": "Permissions-Policy", "value": "microphone=(self), camera=(), geolocation=()" }
       ]
     }
   ]
