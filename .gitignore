@@ -49,6 +49,12 @@ htmlcov/
 .env.local
 # .env.example is committed on purpose - it documents the config surface.
 !.env.example
+# The compact voice scorer is part of the production runtime. Keep large
+# downloaded/trained artifacts ignored while shipping this 373-byte model.
+!models/
+models/*
+!models/voice/
+!models/voice/confidence_weights_fluency.json
 # Downloaded posture corpora and locally trained posture weights.
 data/posture/
 models/posture/

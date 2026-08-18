@@ -16,6 +16,8 @@ score slide instead of dropping off a cliff.
 
 from __future__ import annotations
 
+import json
+import os
 from typing import Any, Dict
 
 from backend.utils.helpers import (  # type: ignore
@@ -33,6 +35,35 @@ from backend.utils.helpers import (  # type: ignore
 )
 
 logger = get_logger(__name__)
+
+
+def _load_trained_weights() -> Dict[str, float]:
+    """Load the small, checked-in fluency scorer trained on SpeechOcean762.
+
+    Keep a safe fallback so a source checkout without the optional artifact
+    still serves acoustic feedback.  The ASR model remains faster-whisper;
+    these weights are the trained voice-confidence model used after ASR.
+    """
+    project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    path = os.path.join(project_root, "models", "voice", "confidence_weights_fluency.json")
+    try:
+        with open(path, "r", encoding="utf-8") as handle:
+            weights = json.load(handle).get("weights", {})
+        loaded = {
+            "wpm": float(weights["wpm"]),
+            "pitch_variation": float(weights["pitch_variation"]),
+            "energy": float(weights["energy"]),
+            "filler_penalty": float(weights["filler_usage"]),
+        }
+        if all(value >= 0 for value in loaded.values()) and sum(loaded.values()) > 0:
+            total = sum(loaded.values())
+            return {key: value / total for key, value in loaded.items()}
+    except (OSError, ValueError, KeyError, TypeError) as exc:
+        logger.warning("Trained voice scorer unavailable; using fallback weights: %s", exc)
+    return dict(CONFIDENCE_WEIGHTS)
+
+
+TRAINED_CONFIDENCE_WEIGHTS = _load_trained_weights()
 
 WPM_ZERO_SCORE_DEVIATION = 60.0   # WPM this far outside the band scores 0
 TOO_LOUD_SPAN_DB = 6.0            # dB above the loud threshold to reach the floor
@@ -128,7 +159,7 @@ def calculate_confidence(
     if energy_db is None:
         energy_db = rms_to_dbfs(energy if energy is not None else 0.0)
 
-    weights = CONFIDENCE_WEIGHTS
+    weights = TRAINED_CONFIDENCE_WEIGHTS
     sub = {
         "wpm": _wpm_score(wpm),
         "pitch_variation": _pitch_variation_score(pitch_std),

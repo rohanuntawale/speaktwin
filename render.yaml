@@ -22,13 +22,10 @@ services:
       - key: PORT
         value: 8000
 
-      # Free instances have 512 MB of RAM. Local Whisper wants a large
-      # slice of that and risks an OOM kill, so use a cloud engine here
-      # and keep the container light. Set the key in the dashboard.
+      # Voice analysis must use the locally trained/runtime model. No cloud
+      # STT provider is used on the live path.
       - key: STT_ENGINE
-        value: groq
-      - key: GROQ_API_KEY
-        sync: false          # set in the dashboard, never in git
+        value: local
 
       # Lock this to your Vercel domain before going public. If you use
       # the vercel.json rewrite, requests arrive same-origin and this
@@ -53,6 +50,8 @@ services:
 
       # Optional LLM coaching line
       - key: OPENROUTER_API_KEY
+      - key: LLM_ENABLED
+        value: "false"
         sync: false
       - key: LLM_MIN_INTERVAL_SECONDS
         value: 10
