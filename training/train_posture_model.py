@@ -27,7 +27,8 @@ from typing import Dict, Iterable, List, Tuple
 import joblib
 import numpy as np
 from sklearn.ensemble import ExtraTreesClassifier
-from sklearn.metrics import classification_report, confusion_matrix
+from sklearn.metrics import (balanced_accuracy_score, classification_report,
+                             confusion_matrix)
 from sklearn.model_selection import GroupShuffleSplit
 
 
@@ -149,8 +150,11 @@ def read_real_csv(path: Path) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
 
 def train_model(X_train: np.ndarray, y_train: np.ndarray) -> ExtraTreesClassifier:
     model = ExtraTreesClassifier(
-        n_estimators=300,
-        min_samples_leaf=4,
+        # Tuned on grouped holdouts. More trees stabilise borderline webcam
+        # frames; a smaller leaf preserves the narrow forward-head boundary.
+        n_estimators=1000,
+        min_samples_leaf=1,
+        max_features=0.8,
         class_weight="balanced",
         random_state=42,
         n_jobs=-1,
@@ -203,11 +207,20 @@ def main() -> int:
         "labels": LABELS,
         "features": FEATURES,
         "classification_report": report,
+        "accuracy": float(report["accuracy"]),
+        "balanced_accuracy": float(balanced_accuracy_score(y[test_idx], predicted)),
         "confusion_matrix": confusion_matrix(y[test_idx], predicted, labels=LABELS).tolist(),
     }
 
     args.output_dir.mkdir(parents=True, exist_ok=True)
-    joblib.dump({"model": model, "features": FEATURES, "labels": LABELS}, args.output_dir / "posture_classifier.joblib")
+    # Evaluation above is held out by subject/video. Refit the deliverable on
+    # every eligible row only after measuring it, so production benefits from
+    # all downloaded data without contaminating the reported benchmark.
+    model = train_model(X, y)
+    # Compression keeps the production artifact practical without changing
+    # predictions or inference behavior.
+    joblib.dump({"model": model, "features": FEATURES, "labels": LABELS},
+                args.output_dir / "posture_classifier.joblib", compress=3)
     (args.output_dir / "metrics.json").write_text(json.dumps(metrics, indent=2) + "\n", encoding="utf-8")
     print(json.dumps(metrics, indent=2))
     print(f"Saved model to {args.output_dir / 'posture_classifier.joblib'}")
