@@ -72,25 +72,25 @@ def generate_feedback(
     # ------------------------------------------------------------------
     if energy_db < SILENCE_DBFS:
         messages.append({
-            "text": "Silence detected. Speak louder!",
+            "text": "I lost the last phrase—bring your voice forward.",
             "type": "info",
             "category": "energy",
         })
     elif energy_db < ENERGY_LOW_DBFS:
         messages.append({
-            "text": "Volume low. Project more!",
+            "text": "Try a little more volume so the room can follow you.",
             "type": "warning",
             "category": "energy",
         })
     elif energy_db > ENERGY_HIGH_DBFS:
         messages.append({
-            "text": "Volume high! Lower slightly.",
+            "text": "That was a touch loud—ease it back a little.",
             "type": "warning",
             "category": "energy",
         })
     else:
         messages.append({
-            "text": "Volume is perfect.",
+            "text": "Your volume feels steady and easy to follow.",
             "type": "success",
             "category": "energy",
         })
@@ -101,32 +101,32 @@ def generate_feedback(
     if mean_pitch > 0:  # only when something voiced was actually detected
         if mean_pitch < PITCH_LOW_THRESHOLD:
             messages.append({
-                "text": "Pitch low. Sounds monotone.",
+                "text": "Your pitch is sitting low—add a little lift.",
                 "type": "warning",
                 "category": "pitch",
             })
         elif mean_pitch > PITCH_HIGH_THRESHOLD:
             messages.append({
-                "text": "Pitch high. Relax your voice.",
+                "text": "Your pitch is high—let the next phrase settle.",
                 "type": "warning",
                 "category": "pitch",
             })
         else:
             messages.append({
-                "text": "Comfortable vocal pitch.",
+                "text": "Your pitch sounds comfortable here.",
                 "type": "success",
                 "category": "pitch",
             })
 
         if pitch_std < PITCH_VARIATION_LOW:
             messages.append({
-                "text": "Add variety! Tone is monotone.",
+                "text": "Try changing pitch slightly on the important words.",
                 "type": "warning",
                 "category": "pitch_variation",
             })
         elif pitch_std >= PITCH_VARIATION_GOOD:
             messages.append({
-                "text": "Great expression! Dynamic voice.",
+                "text": "Nice vocal variety—that gave the thought shape.",
                 "type": "success",
                 "category": "pitch_variation",
             })
@@ -137,25 +137,25 @@ def generate_feedback(
     if wpm > 0:
         if wpm < WPM_TOO_SLOW:
             messages.append({
-                "text": f"Too slow ({int(wpm)} WPM). Pick up pace!",
+                "text": f"You are moving a little slowly ({int(wpm)} WPM). Let the sentence breathe, then continue.",
                 "type": "warning",
                 "category": "wpm",
             })
         elif wpm > WPM_TOO_FAST:
             messages.append({
-                "text": f"Too fast ({int(wpm)} WPM)! Slow down.",
+                "text": f"That pace is quick ({int(wpm)} WPM). Leave yourself a little more room.",
                 "type": "warning",
                 "category": "wpm",
             })
         elif WPM_OPTIMAL_LOW <= wpm <= WPM_OPTIMAL_HIGH:
             messages.append({
-                "text": f"Excellent pace ({int(wpm)} WPM).",
+                "text": f"This pace feels natural ({int(wpm)} WPM).",
                 "type": "success",
                 "category": "wpm",
             })
         else:
             messages.append({
-                "text": f"Acceptable speed ({int(wpm)} WPM).",
+                "text": f"You are in a comfortable range ({int(wpm)} WPM).",
                 "type": "info",
                 "category": "wpm",
             })
@@ -165,19 +165,19 @@ def generate_feedback(
     # ------------------------------------------------------------------
     if filler_rate > FILLER_RATE_HIGH:
         messages.append({
-            "text": "Too many fillers! Use fewer 'ums'.",
+            "text": "A few filler words slipped in—try a quiet pause instead.",
             "type": "warning",
             "category": "fillers",
         })
     elif filler_rate > 0:
         messages.append({
-            "text": "Good control of filler words.",
+            "text": "You are keeping the filler words under control.",
             "type": "info",
             "category": "fillers",
         })
     else:
         messages.append({
-            "text": "No fillers! Perfect clarity.",
+            "text": "The words are coming through cleanly.",
             "type": "success",
             "category": "fillers",
         })
@@ -187,13 +187,13 @@ def generate_feedback(
     # ------------------------------------------------------------------
     if pause_ratio > PAUSE_RATIO_HIGH:
         messages.append({
-            "text": "Long pauses detected. Keep your speech flowing.",
+            "text": "There is a longer pause here—take a breath and continue.",
             "type": "warning",
             "category": "pauses",
         })
     elif pause_ratio > PAUSE_RATIO_NATURAL:
         messages.append({
-            "text": "Natural pacing with good pauses.",
+            "text": "Your pauses feel natural and well placed.",
             "type": "success",
             "category": "pauses",
         })

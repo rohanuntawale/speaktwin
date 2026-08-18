@@ -182,6 +182,9 @@ class PoseTracker {
       facingMode: "user",
     };
     if (deviceId) {
+      // Browsers reject a deviceId exact constraint combined with a facing
+      // mode on some laptops. The selected device is already authoritative.
+      delete videoConstraints.facingMode;
       videoConstraints.deviceId = { exact: deviceId };
     }
 

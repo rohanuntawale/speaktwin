@@ -2,7 +2,7 @@
  * ============================================================
  *  SpeakTwin — application logic
  * ============================================================
- *  Captures microphone audio in the browser, ships 2.5 s WAV
+ *  Captures microphone audio in the browser, ships short WAV
  *  chunks to the backend, and renders what comes back.
  *
  *  Audio is tapped twice from one stream: an AnalyserNode feeds
@@ -22,11 +22,11 @@ const TARGET_RATE = 16000;
 // in half and strips the context it needs, which is the single largest
 // cause of transcripts that do not resemble what was said.
 const SILENCE_RMS = 0.012;      // below this a block counts as quiet
-const SILENCE_HOLD_MS = 650;    // quiet for this long ends an utterance
-const MIN_UTTERANCE_MS = 700;   // shorter than this is a cough, not speech
-// Decoding runs at roughly 1x realtime on CPU, so this also bounds the
-// worst-case wait: an 8 s sentence costs about 8 s of transcription.
-const MAX_UTTERANCE_MS = 8000;  // force a cut so feedback never stalls
+const SILENCE_HOLD_MS = 420;    // quiet for this long ends an utterance
+const MIN_UTTERANCE_MS = 450;   // short phrases still deserve feedback
+// Keep the request window short enough that coaching feels continuous, while
+// leaving enough context for the speech decoder to recognize a phrase.
+const MAX_UTTERANCE_MS = 2800;  // keep the coaching loop close to 2–3 seconds
 const PREROLL_MS = 300;         // keep audio from just before speech began
 
 // ── Elements ─────────────────────────────────────────────────

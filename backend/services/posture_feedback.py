@@ -132,7 +132,7 @@ def generate_posture_feedback(pose: Dict[str, Any], movement: Dict[str, Any],
     """Coaching messages, worst-first so the top one is worth acting on."""
     if not pose.get("detected"):
         return [{
-            "text": "Step into frame so your head and shoulders are visible.",
+            "text": "Move into frame so I can see your head and shoulders.",
             "type": "info",
             "category": "framing",
         }]
@@ -144,28 +144,28 @@ def generate_posture_feedback(pose: Dict[str, Any], movement: Dict[str, Any],
 
     # ── Alignment ────────────────────────────────────────────────────
     if pose_bands.get("shoulder_tilt") == "pronounced":
-        add("One shoulder is dropped. Level them out.", "warning", "shoulders")
+        add("One shoulder is sitting lower—gently level them out.", "warning", "shoulders")
     elif pose_bands.get("shoulder_tilt") == "noticeable":
-        add("Shoulders are slightly uneven.", "info", "shoulders")
+        add("Your shoulders are a little uneven.", "info", "shoulders")
     elif pose_bands.get("shoulder_tilt") == "good":
-        add("Shoulders are level.", "success", "shoulders")
+        add("Your shoulders look level and relaxed.", "success", "shoulders")
 
     if pose_bands.get("head_tilt") == "pronounced":
-        add("Your head is tilted. Bring it upright.", "warning", "head")
+        add("Your head is tilted—bring it gently back to centre.", "warning", "head")
     elif pose_bands.get("head_tilt") == "noticeable":
-        add("Slight head tilt.", "info", "head")
+        add("There is a small head tilt; centre yourself when you can.", "info", "head")
 
     if pose_bands.get("torso_lean") == "pronounced":
-        add("You're leaning to one side. Centre your weight.", "warning", "torso")
+        add("You are leaning to one side—let your weight settle in the middle.", "warning", "torso")
     elif pose_bands.get("torso_lean") == "noticeable":
-        add("Small lean off centre.", "info", "torso")
+        add("You are drifting a little off centre.", "info", "torso")
 
     # ── Forward head ─────────────────────────────────────────────────
     if pose_bands.get("forward_head") == "pronounced":
-        add("Head is pushed forward. Draw your chin back over your shoulders.",
+        add("Your head is reaching toward the screen—bring your chin back over your shoulders.",
             "warning", "neck")
     elif pose_bands.get("forward_head") == "noticeable":
-        add("Head drifting toward the screen.", "info", "neck")
+        add("Your head is starting to drift toward the screen.", "info", "neck")
 
     # ── Hand at the face ─────────────────────────────────────────────
     if pose_bands.get("hand_on_face") == "pronounced":
@@ -176,12 +176,12 @@ def generate_posture_feedback(pose: Dict[str, Any], movement: Dict[str, Any],
 
     # ── Openness ─────────────────────────────────────────────────────
     if pose_bands.get("openness") == "pronounced":
-        add("You're hunched. Roll your shoulders back and lift your chest.",
+        add("You are folding in a little—roll your shoulders back and lift your chest.",
             "warning", "openness")
     elif pose_bands.get("openness") == "noticeable":
-        add("Open your chest a little.", "info", "openness")
+        add("Give your chest a little more space.", "info", "openness")
     elif pose_bands.get("openness") == "good":
-        add("Open, upright posture.", "success", "openness")
+        add("You look open and upright.", "success", "openness")
 
     # ── Movement ─────────────────────────────────────────────────────
     if movement_bands.get("sway") == "restless":

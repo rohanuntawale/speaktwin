@@ -508,7 +508,7 @@ body.live .mic {
 
 /* ───────────────── Words ───────────────── */
 .lower {
-  max-width: 1160px;
+  max-width: 1080px;
   margin: 20px auto 0;
   display: grid;
   grid-template-columns: 1.5fr 1fr;
@@ -733,9 +733,9 @@ mark.fill { color: var(--rose); background: rgba(255, 95, 126, 0.11); }
    optically centred. */
 .rig {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  grid-template-columns: minmax(0, 0.35fr) minmax(340px, 0.82fr) minmax(520px, 1.75fr);
   align-items: start;
-  gap: clamp(14px, 2vw, 30px);
+  gap: clamp(20px, 2.8vw, 44px);
   width: min(1380px, 100vw - 2 * clamp(20px, 4vw, 56px));
   position: relative;
   left: 50%;
@@ -745,12 +745,20 @@ mark.fill { color: var(--rose); background: rgba(255, 95, 126, 0.11); }
 .rig-spacer { min-width: 0; }
 .rig > .console { grid-column: 2; }
 
+/* The video is the mirror's primary instrument. Supporting meters stay
+   compact so the speaker can keep their face and posture in view. */
+.rig > .console {
+  width: min(100%, 520px);
+  max-width: 520px;
+  padding-top: clamp(18px, 3vh, 34px);
+}
+
 .mirror {
   grid-column: 3;
   justify-self: end;
   align-self: start;
   margin-top: clamp(0px, 2.5vh, 22px);
-  width: min(300px, 100%);
+  width: min(680px, 100%);
   display: grid;
   gap: 6px;
   justify-items: stretch;
@@ -820,7 +828,7 @@ mark.fill { color: var(--rose); background: rgba(255, 95, 126, 0.11); }
 .mirror-frame {
   position: relative;
   width: 100%;
-  aspect-ratio: 4 / 3;
+  aspect-ratio: 16 / 10;
   border-radius: 12px;
   overflow: hidden;
   background: #05060c;
@@ -1241,7 +1249,7 @@ mark.fill { color: var(--rose); background: rgba(255, 95, 126, 0.11); }
   .mirror {
     grid-column: 1;
     justify-self: center;
-    width: min(340px, 80vw);
+    width: min(680px, 92vw);
     margin: 22px 0 0;
   }
 }
