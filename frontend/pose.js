@@ -42,16 +42,19 @@ const JOINTS = [11, 12, 13, 14, 15, 16, 23, 24, 0];
 // batch every 2.5 s remains the authoritative score; this is the nudge.
 // Thresholds mirror backend/utils/helpers.py — keep them in step.
 const T = {
-  shoulderTilt: [5, 10],
-  headTilt: [8, 15],
-  torsoLean: [7, 14],
-  openness: [0.62, 0.85],   // [closed, open] — note: higher is better
+  // Webcam landmarks jitter by a few degrees even when the speaker is still.
+  // These bands deliberately wait for a meaningful departure, not a single
+  // imperfect frame.
+  shoulderTilt: [8, 15],
+  headTilt: [12, 20],
+  torsoLean: [10, 18],
+  openness: [0.56, 0.82],   // [closed, open] — note: higher is better
   // Head grown past your own neutral size — craning at the screen brings
   // only the head nearer the camera. Matches HEAD_SCALE_* in
   // backend/utils/helpers.py. Judged vs a self-calibrated baseline, never
   // an absolute: the old z-depth check nagged correctly-seated people
   // because webcam perspective biases everyone's ears toward the camera.
-  headScale: [1.10, 1.20],
+  headScale: [1.18, 1.30],
   // Anatomical ceiling on the baseline: ear span is at most ~half the
   // shoulder width at true neutral. A larger "neutral" means the camera
   // first saw you already leaning in — without this clamp that craned
@@ -64,13 +67,22 @@ const T = {
   // Sustained drop of the head below the speaker's own session-best
   // height, as a fraction. Self-calibrated, so it survives different
   // bodies, chairs, and camera angles.
-  headDrop: [0.88, 0.80],   // [watch below, fix below] × baseline
+  headDrop: [0.78, 0.68],   // [watch below, fix below] × baseline
 };
 
 // How long a slump must persist before it is called (frames), and how
 // long everything must stay clear before "Good posture" is earned.
-const DROP_HOLD_FRAMES = 24;
-const GOOD_HOLD_FRAMES = 30;
+const DROP_HOLD_FRAMES = 45;
+const GOOD_HOLD_FRAMES = 45;
+
+function median(values) {
+  if (!values.length) return 0;
+  const sorted = [...values].sort((a, b) => a - b);
+  const middle = Math.floor(sorted.length / 2);
+  return sorted.length % 2
+    ? sorted[middle]
+    : (sorted[middle - 1] + sorted[middle]) / 2;
+}
 
 const TONE = {
   good:  "rgba(74, 222, 159, 0.95)",
@@ -134,6 +146,8 @@ class PoseTracker {
     this.faceFrames = 0;    // consecutive frames with a hand at the face
     this.baseAge = 0;       // frames of baseline evidence collected
     this.clearFrames = 0;   // consecutive frames with nothing wrong
+    this.calibrationScales = [];
+    this.calibrationHeads = [];
 
     this.landmarker = null;
     this.stream = null;
@@ -258,6 +272,8 @@ class PoseTracker {
     this.faceFrames = 0;
     this.baseAge = 0;
     this.clearFrames = 0;
+    this.calibrationScales = [];
+    this.calibrationHeads = [];
     this._fpsFrames = 0;
     this._fpsLast = 0;
     this._fpsValue = 0;
@@ -425,10 +441,15 @@ class PoseTracker {
       const headScale = Math.hypot(re[0] - le[0], re[1] - le[1]) / width;
       if (headScale > 0) {
         chinMeasured = true;
-        this.baseScale = Math.min(
-          this.baseScale * 1.00005, headScale, T.headScaleCeiling
-        );
-        this.baseAge++;
+        if (this.baseAge < 60) {
+          this.calibrationScales.push(headScale);
+          this.baseAge++;
+          if (this.baseAge === 60) {
+            this.baseScale = Math.min(
+              median(this.calibrationScales), T.headScaleCeiling
+            );
+          }
+        }
 
         const dev = headScale / this.baseScale;
         if (dev >= T.headScale[0]) this.fwdFrames++;
@@ -473,7 +494,11 @@ class PoseTracker {
     if (nose) {
       const headRatio = (shoulderMid[1] - nose[1]) / width;
       if (headRatio > 0) {
-        this.baseHead = Math.max(this.baseHead * 0.9995, headRatio);
+        if (this.baseAge < 60) {
+          this.calibrationHeads.push(headRatio);
+        } else if (!this.baseHead && this.calibrationHeads.length) {
+          this.baseHead = median(this.calibrationHeads);
+        }
 
         const rel = this.baseHead > 1e-3 ? headRatio / this.baseHead : 1;
         if (rel < T.headDrop[0]) this.lowFrames++;
@@ -489,6 +514,14 @@ class PoseTracker {
       }
     }
 
+    // Never coach during calibration. The first second is for learning the
+    // speaker's neutral camera geometry, not for judging it.
+    if (this.baseAge < 60) {
+      this.onCalibration({ active: true, progress: Math.min(100, Math.round((this.baseAge / 60) * 100)) });
+      this._raise(null, "idle", now);
+      return;
+    }
+
     const worst = checks
       .filter((c) => c.band !== "good")
       .sort((a, b) => b.severity - a.severity)[0];
@@ -496,11 +529,7 @@ class PoseTracker {
     if (worst) {
       this.clearFrames = 0;
       this._raise(worst.text, worst.band, now);
-      if (this.baseAge < 60) {
-        this.onCalibration({ active: true, progress: Math.min(100, Math.round((this.baseAge / 60) * 100)) });
-      } else {
-        this.onCalibration({ active: false, progress: 100 });
-      }
+      this.onCalibration({ active: false, progress: 100 });
       return;
     }
 
