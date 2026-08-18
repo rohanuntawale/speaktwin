@@ -21,13 +21,13 @@ const TARGET_RATE = 16000;
 // trained on 30 s windows; handing it arbitrary 2.5 s slices chops words
 // in half and strips the context it needs, which is the single largest
 // cause of transcripts that do not resemble what was said.
-const SILENCE_RMS = 0.012;      // below this a block counts as quiet
-const SILENCE_HOLD_MS = 420;    // quiet for this long ends an utterance
-const MIN_UTTERANCE_MS = 450;   // short phrases still deserve feedback
+const SILENCE_RMS = 0.008;      // support quiet laptop microphones
+const SILENCE_HOLD_MS = 550;    // leave room for word-final consonants
+const MIN_UTTERANCE_MS = 650;   // avoid sending clipped fragments to Whisper
 // Keep the request window short enough that coaching feels continuous, while
 // leaving enough context for the speech decoder to recognize a phrase.
-const MAX_UTTERANCE_MS = 2800;  // keep the coaching loop close to 2–3 seconds
-const PREROLL_MS = 300;         // keep audio from just before speech began
+const MAX_UTTERANCE_MS = 4200;  // enough context for local Whisper accuracy
+const PREROLL_MS = 450;         // preserve initial consonants and short words
 
 // ── Elements ─────────────────────────────────────────────────
 const $ = (id) => document.getElementById(id);
@@ -208,18 +208,27 @@ async function startListening() {
     let preroll = [];       // rolling buffer of the moments before it
     let quietMs = 0;
     let speaking = false;
+    let analysisQueue = Promise.resolve();
 
-    const flush = async () => {
+    const flush = () => {
       const samples = new Float32Array(speech);
       speech = [];
       preroll = [];
       quietMs = 0;
       speaking = false;
 
-      if (samples.length < (MIN_UTTERANCE_MS / 1000) * rate) return;
-      setStatus("Transcribing");
-      const result = await apiAnalyze(encodeWav(samples, rate));
-      if (result) render(result);
+      if (samples.length < (MIN_UTTERANCE_MS / 1000) * rate) return analysisQueue;
+
+      // Whisper is CPU-bound on the local Render instance. Queue requests so
+      // a slow decode cannot reorder transcript segments or compete for the
+      // model lock with the next utterance.
+      const job = async () => {
+        setStatus("Transcribing");
+        const result = await apiAnalyze(encodeWav(samples, rate));
+        if (result) render(result);
+      };
+      analysisQueue = analysisQueue.then(job, job);
+      return analysisQueue;
     };
 
     processor.onaudioprocess = (e) => {

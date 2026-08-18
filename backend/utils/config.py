@@ -311,7 +311,11 @@ def get_settings() -> Settings:
         whisper_language=_str("WHISPER_LANGUAGE", "en"),
         # Guards that make Whisper decline rather than invent. Without
         # them it will confidently transcribe breath and room tone.
-        whisper_no_speech_threshold=_float("WHISPER_NO_SPEECH_THRESHOLD", 0.6,
+        # Quiet laptop microphones often receive a moderate no-speech
+        # probability even when words are present. The browser gate and
+        # server energy gate already reject silence, so allow Whisper a bit
+        # more room to decode low-volume speech.
+        whisper_no_speech_threshold=_float("WHISPER_NO_SPEECH_THRESHOLD", 0.7,
                                            minimum=0.0, maximum=1.0),
         whisper_logprob_threshold=_float("WHISPER_LOGPROB_THRESHOLD", -1.0),
         whisper_compression_threshold=_float("WHISPER_COMPRESSION_THRESHOLD", 2.4),
