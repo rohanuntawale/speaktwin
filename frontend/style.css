@@ -813,44 +813,8 @@ mark.fill { color: var(--rose); background: rgba(255, 95, 126, 0.11); }
 .mirror.on .cam-state { color: var(--ember-hi); }
 
 /* Action icon buttons row */
-.mirror-actions {
-  display: flex;
-  align-items: center;
-  gap: 3px;
-  flex-shrink: 0;
-}
 
-.cam-icon-btn {
-  display: grid;
-  place-items: center;
-  width: 26px;
-  height: 26px;
-  border-radius: 6px;
-  border: 1px solid var(--line);
-  background: rgba(255, 255, 255, 0.03);
-  color: var(--faint);
-  cursor: pointer;
-  transition: border-color 0.2s ease, color 0.2s ease, background 0.2s ease, transform 0.15s ease;
-  padding: 0;
-}
-.cam-icon-btn svg { width: 13px; height: 13px; }
-.cam-icon-btn:hover {
-  border-color: rgba(255, 255, 255, 0.22);
-  color: var(--bone);
-  background: rgba(255, 255, 255, 0.06);
-}
-.cam-icon-btn:active { transform: scale(0.9); }
-.cam-icon-btn.active {
-  border-color: var(--line-warm);
-  color: var(--ember-hi);
-  background: rgba(255, 143, 77, 0.1);
-}
 /* Snap flash feedback */
-.cam-icon-btn.snapping { animation: snap-flash 0.35s ease; }
-@keyframes snap-flash {
-  0%   { background: rgba(255, 255, 255, 0.55); color: #06070e; border-color: transparent; }
-  100% { background: rgba(255, 255, 255, 0.03); color: var(--faint); }
-}
 
 /* ── Mirror frame ── */
 .mirror-frame {
@@ -885,27 +849,11 @@ mark.fill { color: var(--rose); background: rgba(255, 95, 126, 0.11); }
 /* Mirrored, because people expect to see themselves as in a mirror. */
 .mirror-frame video { transform: scaleX(-1); }
 /* When flipped class is on, un-mirror the video (natural orientation). */
-.mirror-frame.flipped video { transform: scaleX(1); }
 
 .mirror.on video { opacity: 0.6; }
 .mirror.on canvas { opacity: 1; }
 
 /* Fullscreen mode */
-.mirror-frame.is-fullscreen {
-  position: fixed;
-  inset: 0;
-  z-index: 999;
-  width: 100vw;
-  height: 100vh;
-  aspect-ratio: unset;
-  border-radius: 0;
-  border: none;
-  background: #000;
-}
-.mirror-frame.is-fullscreen video,
-.mirror-frame.is-fullscreen canvas {
-  object-fit: contain;
-}
 
 .mirror-off {
   display: grid;

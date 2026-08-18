@@ -154,10 +154,13 @@ PAUSE_RATIO_NATURAL = 0.35    # above this -> healthy phrasing
 # Confidence Score Weights
 # ---------------------------------------------------------------------------
 CONFIDENCE_WEIGHTS = {
-    "wpm": 0.25,
-    "pitch_variation": 0.25,
-    "energy": 0.20,
-    "filler_penalty": 0.30,
+    # Conservative blend from the 5,000-utterance SpeechOcean762 fit.
+    # Energy and filler coefficients were not adopted directly because the
+    # corpus has near-constant energy and 95% zero-filler clips.
+    "wpm": 0.35,
+    "pitch_variation": 0.12,
+    "energy": 0.21,
+    "filler_penalty": 0.32,
 }
 
 # ---------------------------------------------------------------------------

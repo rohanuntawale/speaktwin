@@ -124,6 +124,9 @@ python -m backend.main
 
 Open **http://localhost:8000**. Interactive API docs are at **/docs**.
 
+For the posture-data download, synthetic trainer, and the complete PowerShell
+command list, see [docs/POSTURE_TRAINING.md](docs/POSTURE_TRAINING.md).
+
 > Browsers only grant microphone access on `localhost` or over HTTPS. Serving the page from `file://` or a plain-HTTP LAN address will fail the permission check.
 
 ### Docker

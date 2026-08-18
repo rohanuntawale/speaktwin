@@ -88,17 +88,11 @@ const el = {
   valPresence: $("val-presence"),
 
   // Camera controls
-  camGridBtn: $("cam-grid-btn"),
-  camFullscreenBtn: $("cam-fullscreen-btn"),
-  camSnapBtn: $("cam-snap-btn"),
-  camFlipBtn: $("cam-flip-btn"),
   camResetBtn: $("cam-reset-btn"),
   camBrightness: $("cam-brightness"),
   camBrightnessVal: $("cam-brightness-val"),
   camContrast: $("cam-contrast"),
   camContrastVal: $("cam-contrast-val"),
-  camZoom: $("cam-zoom"),
-  camZoomVal: $("cam-zoom-val"),
   camControls: $("cam-controls"),
   camFpsBadge: $("cam-fps-badge"),
   camRecDot: $("cam-rec-dot"),
@@ -652,11 +646,29 @@ let poseTracker = null;
 // ── Camera video filter & adjustment state ───────────────────
 let camBrightness = 100;  // %
 let camContrast   = 100;  // %
-let camZoom       = 100;  // % (100 = 1×)
-let camFlipped    = false;
-let camFullscreen = false;
-let camGrid       = false;
 let selectedDeviceId = null;
+
+function cameraErrorMessage(err) {
+  switch (err?.name) {
+    case "NotAllowedError":
+    case "PermissionDeniedError":
+      return "Camera permission is blocked. Allow camera access for localhost in your browser settings, then try again.";
+    case "NotFoundError":
+    case "DevicesNotFoundError":
+      return "No camera was found. Connect a webcam and try again.";
+    case "NotReadableError":
+    case "TrackStartError":
+      return "The camera is being used by another app. Close that app and try again.";
+    case "OverconstrainedError":
+      return "That camera mode is unavailable. Check the camera selector and try again.";
+    case "InsecureContextError":
+      return "Camera access requires http://localhost:8000 or an HTTPS address.";
+    case "PoseModelError":
+      return "The camera opened, but the posture model could not be downloaded. Check your internet connection and try again.";
+    default:
+      return "Camera could not start. Check browser permissions and try again.";
+  }
+}
 
 /** Apply current brightness + contrast as CSS filter on the video. */
 function applyCamFilter() {
@@ -667,70 +679,23 @@ function applyCamFilter() {
 /** Show/hide the camera controls panel and icon buttons when camera is on/off. */
 function setCamControlsVisible(visible) {
   if (el.camControls)      el.camControls.hidden = !visible;
-  if (el.camFullscreenBtn) el.camFullscreenBtn.hidden = !visible;
-  if (el.camSnapBtn)       el.camSnapBtn.hidden = !visible;
-  if (el.camFlipBtn)       el.camFlipBtn.hidden = !visible;
-  if (el.camGridBtn)       el.camGridBtn.hidden = !visible;
   if (el.camFpsBadge)      el.camFpsBadge.hidden = !visible;
   if (el.camResTag)        el.camResTag.hidden = !visible;
   if (!visible && el.camCalibBanner) el.camCalibBanner.hidden = true;
 }
 
-/** Toggle fullscreen mode on the mirror frame. */
-function toggleFullscreen() {
-  if (!el.mirrorFrame) return;
-  camFullscreen = !camFullscreen;
-  el.mirrorFrame.classList.toggle("is-fullscreen", camFullscreen);
-  if (el.camFullscreenBtn) {
-    el.camFullscreenBtn.classList.toggle("active", camFullscreen);
-    el.camFullscreenBtn.setAttribute("aria-label", camFullscreen ? "Exit fullscreen" : "Toggle fullscreen");
-    el.camFullscreenBtn.innerHTML = camFullscreen
-      ? `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
-           <path d="M8 3v3a2 2 0 0 1-2 2H3"/><path d="M21 8h-3a2 2 0 0 1-2-2V3"/>
-           <path d="M3 16h3a2 2 0 0 1 2 2v3"/><path d="M16 21v-3a2 2 0 0 1 2-2h3"/>
-         </svg>`
-      : `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
-           <path d="M8 3H5a2 2 0 0 0-2 2v3"/><path d="M21 8V5a2 2 0 0 0-2-2h-3"/>
-           <path d="M3 16v3a2 2 0 0 0 2 2h3"/><path d="M16 21h3a2 2 0 0 0 2-2v-3"/>
-         </svg>`;
-  }
-  if (camFullscreen) {
-    document.addEventListener("keydown", _escFullscreen);
-  } else {
-    document.removeEventListener("keydown", _escFullscreen);
-  }
-}
-function _escFullscreen(e) { if (e.key === "Escape" && camFullscreen) toggleFullscreen(); }
 
-/** Toggle natural vs mirrored orientation. */
-function toggleFlip() {
-  if (!el.mirrorFrame) return;
-  camFlipped = !camFlipped;
-  el.mirrorFrame.classList.toggle("flipped", camFlipped);
-  if (el.camFlipBtn) el.camFlipBtn.classList.toggle("active", camFlipped);
-  if (poseTracker) poseTracker.setFlipped(camFlipped);
-}
 
-/** Toggle rule-of-thirds framing grid overlay. */
-function toggleGrid() {
-  camGrid = !camGrid;
-  if (el.camGridBtn) el.camGridBtn.classList.toggle("active", camGrid);
-  if (poseTracker) poseTracker.setGrid(camGrid);
-}
 
-/** Reset brightness, contrast, zoom to defaults. */
+/** Reset brightness and contrast to defaults. */
 function resetAdjustments() {
   camBrightness = 100;
   camContrast = 100;
-  camZoom = 100;
   if (el.camBrightness)    el.camBrightness.value = 100;
   if (el.camContrast)      el.camContrast.value = 100;
-  if (el.camZoom)          el.camZoom.value = 100;
   if (el.camBrightnessVal) el.camBrightnessVal.textContent = "100%";
   if (el.camContrastVal)   el.camContrastVal.textContent = "100%";
-  if (el.camZoomVal)       el.camZoomVal.textContent = "1×";
   applyCamFilter();
-  if (poseTracker) poseTracker.setZoom(1.0);
 }
 
 /** Enumerate connected video input devices and populate dropdown if >1. */
@@ -755,19 +720,6 @@ async function loadCameraDevices() {
   }
 }
 
-/** Take a snapshot and trigger a PNG download. */
-function takeSnapshot() {
-  if (!poseTracker || !poseTracker.active) return;
-  const dataUrl = poseTracker.snapshot();
-  const a = document.createElement("a");
-  a.href = dataUrl;
-  a.download = `speaktwin-snapshot-${Date.now()}.png`;
-  a.click();
-  if (el.camSnapBtn) {
-    el.camSnapBtn.classList.add("snapping");
-    setTimeout(() => el.camSnapBtn && el.camSnapBtn.classList.remove("snapping"), 380);
-  }
-}
 
 if (el.camBtn) {
   el.camBtn.addEventListener("click", async () => {
@@ -780,11 +732,7 @@ if (el.camBtn) {
       if (el.camHint) el.camHint.textContent = "Off";
       setCamControlsVisible(false);
       resetAdjustments();
-      camFlipped = false; camFullscreen = false; camGrid = false;
       if (el.mirrorFrame)      el.mirrorFrame.classList.remove("flipped", "is-fullscreen");
-      if (el.camFlipBtn)       el.camFlipBtn.classList.remove("active");
-      if (el.camFullscreenBtn) el.camFullscreenBtn.classList.remove("active");
-      if (el.camGridBtn)       el.camGridBtn.classList.remove("active");
       applyCamFilter();
       return;
     }
@@ -828,10 +776,12 @@ if (el.camBtn) {
       loadCameraDevices();
     } catch (err) {
       console.error("[SpeakTwin] camera", err);
+      // A model/CDN failure can happen after the camera has opened. Ensure
+      // the stream is released so the next attempt is not blocked by this
+      // stale request.
+      if (poseTracker) poseTracker.stop();
       if (el.camHint) el.camHint.textContent = "Blocked";
-      el.postureNotes.innerHTML =
-        `<p class="empty">Camera access is blocked. Allow it in your browser's ` +
-        `site settings, then turn it on again.</p>`;
+      el.postureNotes.innerHTML = `<p class="empty">${cameraErrorMessage(err)}</p>`;
     } finally {
       el.camBtn.disabled = false;
     }
@@ -853,18 +803,6 @@ if (el.camContrast) {
     applyCamFilter();
   });
 }
-if (el.camZoom) {
-  el.camZoom.addEventListener("input", () => {
-    camZoom = Number(el.camZoom.value);
-    const level = camZoom / 100;
-    if (el.camZoomVal) el.camZoomVal.textContent = `${level.toFixed(1)}×`;
-    if (poseTracker) poseTracker.setZoom(level);
-  });
-}
-if (el.camFlipBtn)       el.camFlipBtn.addEventListener("click", toggleFlip);
-if (el.camGridBtn)       el.camGridBtn.addEventListener("click", toggleGrid);
-if (el.camFullscreenBtn) el.camFullscreenBtn.addEventListener("click", toggleFullscreen);
-if (el.camSnapBtn)       el.camSnapBtn.addEventListener("click", takeSnapshot);
 if (el.camResetBtn)      el.camResetBtn.addEventListener("click", resetAdjustments);
 
 if (el.camDeviceSelect) {
@@ -892,14 +830,6 @@ document.addEventListener("keydown", (e) => {
   const key = e.key.toLowerCase();
   if (key === "c") {
     if (el.camBtn) el.camBtn.click();
-  } else if (key === "f") {
-    if (poseTracker && poseTracker.active) toggleFullscreen();
-  } else if (key === "s") {
-    if (poseTracker && poseTracker.active) takeSnapshot();
-  } else if (key === "m") {
-    if (poseTracker && poseTracker.active) toggleFlip();
-  } else if (key === "g") {
-    if (poseTracker && poseTracker.active) toggleGrid();
   }
 });
 

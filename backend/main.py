@@ -19,7 +19,15 @@ after the API router so `/api/*` still wins.
 from __future__ import annotations
 
 import os
+import sys
 import traceback
+
+# Running this file directly (`python backend/main.py`) puts `backend/` on
+# sys.path rather than the project root, so `from backend import ...` cannot
+# resolve and the app dies before it starts. Put the root on the path first
+# so the file works both as a script and as `uvicorn backend.main:app`.
+if __package__ in (None, ""):
+    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from fastapi import FastAPI, HTTPException, Request  # type: ignore
 from fastapi.exceptions import RequestValidationError  # type: ignore

@@ -162,22 +162,48 @@ class PoseTracker {
     return this.running;
   }
 
-  /** Set digital zoom level (1.0–3.0). Updates overlay crop. */
-  setZoom(level) {
-    this.zoomLevel = Math.max(1.0, Math.min(3.0, level));
-  }
 
-  /** Toggle or set the flip state (natural vs mirrored). */
-  setFlipped(state) {
-    this.flipped = state;
-  }
 
-  /** Toggle or set framing guide overlay grid. */
-  setGrid(state) {
-    this.showGrid = state;
-  }
 
   async start(deviceId) {
+    if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) {
+      const error = new Error("Camera access requires localhost or HTTPS.");
+      error.name = "InsecureContextError";
+      throw error;
+    }
+
+    // Ask for the webcam before loading the remote pose model. This keeps
+    // camera permission failures separate from CDN/model failures and lets
+    // the user see the live preview as soon as the device is available.
+    this.onStatus("Requesting camera");
+    const videoConstraints = {
+      width: { ideal: 1280 },
+      height: { ideal: 720 },
+      facingMode: "user",
+    };
+    if (deviceId) {
+      videoConstraints.deviceId = { exact: deviceId };
+    }
+
+    this.stream = await navigator.mediaDevices.getUserMedia({
+      video: videoConstraints,
+      audio: false,
+    });
+
+    try {
+      this.video.srcObject = this.stream;
+      await this.video.play();
+
+      this.canvas.width = this.video.videoWidth || 640;
+      this.canvas.height = this.video.videoHeight || 480;
+
+      const resLabel = `${this.canvas.height}p`;
+      this.onResolution(resLabel);
+    } catch (error) {
+      this.stop();
+      throw error;
+    }
+
     this.onStatus("Loading pose model");
 
     if (!this.landmarker) {
@@ -212,7 +238,13 @@ class PoseTracker {
           lastErr = err;
         }
       }
-      if (!this.landmarker) throw lastErr || new Error("No pose model loaded");
+      if (!this.landmarker) {
+        this.stop();
+        const error = new Error("The posture model could not be loaded.");
+        error.name = "PoseModelError";
+        error.cause = lastErr;
+        throw error;
+      }
     }
 
     // New session, new body position — recalibrate every baseline.
@@ -226,30 +258,6 @@ class PoseTracker {
     this._fpsFrames = 0;
     this._fpsLast = 0;
     this._fpsValue = 0;
-
-    this.onStatus("Requesting camera");
-    const videoConstraints = {
-      width: { ideal: 1280 },
-      height: { ideal: 720 },
-      facingMode: "user",
-    };
-    if (deviceId) {
-      videoConstraints.deviceId = { exact: deviceId };
-    }
-
-    this.stream = await navigator.mediaDevices.getUserMedia({
-      video: videoConstraints,
-      audio: false,
-    });
-
-    this.video.srcObject = this.stream;
-    await this.video.play();
-
-    this.canvas.width = this.video.videoWidth || 640;
-    this.canvas.height = this.video.videoHeight || 480;
-
-    const resLabel = `${this.canvas.height}p`;
-    this.onResolution(resLabel);
 
     this.running = true;
     this.buffer = [];
@@ -697,31 +705,6 @@ class PoseTracker {
     ctx.restore(); // zoom transform
   }
 
-  /**
-   * Composites the current video frame and skeleton onto a temporary
-   * canvas and returns it as a PNG data URL for snapshot download.
-   */
-  snapshot() {
-    const tmp = document.createElement("canvas");
-    tmp.width = this.canvas.width;
-    tmp.height = this.canvas.height;
-    const tc = tmp.getContext("2d");
-
-    // Apply CSS filter values to the snapshot
-    tc.filter = this.video.style.filter || "none";
-    // Mirror to match what the user sees
-    if (!this.flipped) {
-      tc.translate(tmp.width, 0);
-      tc.scale(-1, 1);
-    }
-    tc.drawImage(this.video, 0, 0, tmp.width, tmp.height);
-    if (!this.flipped) {
-      tc.setTransform(1, 0, 0, 1, 0, 0); // reset
-    }
-    tc.filter = "none";
-    tc.drawImage(this.canvas, 0, 0);
-    return tmp.toDataURL("image/png");
-  }
 }
 
 window.PoseTracker = PoseTracker;

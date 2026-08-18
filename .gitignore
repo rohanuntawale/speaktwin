@@ -49,3 +49,6 @@ htmlcov/
 .env.local
 # .env.example is committed on purpose - it documents the config surface.
 !.env.example
+# Downloaded posture corpora and locally trained posture weights.
+data/posture/
+models/posture/
